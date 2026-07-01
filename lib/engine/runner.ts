@@ -8,6 +8,12 @@ import { getSettings } from "../repos/settings";
 import * as Runs from "../repos/runs";
 import { buildArgv } from "./template";
 import { runStep } from "./exec";
+import {
+  passthrough,
+  claudeStream,
+  type StreamTransform,
+  type TranscriptEntry,
+} from "./transcript";
 import { publish } from "./bus";
 
 /**
@@ -34,6 +40,7 @@ export async function runTask(
       const adapter = getAdapter(db, agent.adapter_id);
       if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
 
+      const makeTransform = transformFor(adapter.command);
       const system = buildSystem(agent);
       const projects = agent.projects.map((p) => p.path);
       const effort = agent.effort === "off" ? "" : agent.effort;
@@ -58,24 +65,21 @@ export async function runTask(
         step_id: stepId,
       });
 
-      // Chunk events carry the full cumulative output (idempotent snapshot),
-      // so replay + live delivery can't double-count. Output is also persisted
-      // incrementally so a late subscriber / reload sees progress.
-      let acc = "";
+      // The transcript is a full snapshot (idempotent) persisted + published on
+      // every change, so a live subscriber and a mid-run reload both catch up
+      // without double-counting. runStep's return value is the clean answer
+      // text (the transcript's `text` entries), used as this step's output.
       const result = await attemptWithRetries(
         argv,
         input,
         settings.step_timeout_seconds * 1000,
         settings.retries,
-        (delta) => {
-          acc += delta;
-          Runs.appendStepOutput(db, stepId, delta);
-          publish(run.id, { type: "chunk", position: pos, text: acc });
+        makeTransform,
+        (entries) => {
+          Runs.setStepTranscript(db, stepId, JSON.stringify(entries));
+          publish(run.id, { type: "transcript", position: pos, entries });
         },
-        () => {
-          acc = "";
-          Runs.clearStepOutput(db, stepId);
-        },
+        () => Runs.clearStepTranscript(db, stepId),
       );
 
       if (result.exitCode === 0 && !result.timedOut) {
@@ -148,18 +152,33 @@ async function attemptWithRetries(
   input: string,
   timeoutMs: number,
   retries: number,
-  onChunk: (text: string) => void,
+  makeTransform: (onChange: () => void) => StreamTransform,
+  onTranscript: (entries: TranscriptEntry[]) => void,
   beforeAttempt: () => void,
 ) {
+  // A fresh, stateful transform per attempt whose onChange reports the live
+  // transcript. Declared with `let` so the onChange closure can read it back.
+  const attempt = () => {
+    let transform: StreamTransform;
+    transform = makeTransform(() => onTranscript(transform.entries()));
+    return runStep({ argv, input, timeoutMs, transform });
+  };
   beforeAttempt();
-  let result = await runStep({ argv, input, timeoutMs, onChunk });
+  let result = await attempt();
   let left = retries;
   while (left > 0 && (result.exitCode !== 0 || result.timedOut)) {
     left--;
     beforeAttempt();
-    result = await runStep({ argv, input, timeoutMs, onChunk });
+    result = await attempt();
   }
   return result;
+}
+
+/** Choose how to decode a CLI's stdout: parse stream-json, else passthrough. */
+function transformFor(
+  command: string,
+): (onChange: () => void) => StreamTransform {
+  return command.includes("stream-json") ? claudeStream : passthrough;
 }
 
 function resolveAgents(db: Database, task: Task): Agent[] {

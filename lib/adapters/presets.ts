@@ -26,8 +26,11 @@ export const PRESETS: AdapterPreset[] = [
   {
     name: "claude",
     bin: "claude",
+    // stream-json (+ partial messages) makes the CLI emit tokens as they
+    // generate; plain `-p` buffers the whole reply to the end (no live stream).
+    // The runner parses this JSONL into a live transcript (see transcript.ts).
     command:
-      "claude -p {model:--model} {effort:--effort} --append-system-prompt {system} {projects:--add-dir}",
+      "claude -p {model:--model} {effort:--effort} --output-format stream-json --verbose --include-partial-messages --append-system-prompt {system} {projects:--add-dir}",
     models: [
       { value: "opus", label: "Opus 4.8" },
       { value: "sonnet", label: "Sonnet 5" },

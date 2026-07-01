@@ -4,14 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Task } from "@/lib/types";
 import type { RunWithSteps } from "@/lib/repos/runs";
+import type { TranscriptEntry } from "@/lib/engine/transcript";
 import { runTaskAction } from "../../actions";
 
 interface StepView {
   position: number;
   agent_name: string;
-  output: string;
+  entries: TranscriptEntry[];
   status: string;
   exit_code: number | null;
+}
+
+function parseTranscript(json: string): TranscriptEntry[] {
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? (v as TranscriptEntry[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function RunView({
@@ -32,7 +42,7 @@ export function RunView({
       seed[s.position] = {
         position: s.position,
         agent_name: s.agent_name,
-        output: s.output,
+        entries: parseTranscript(s.transcript),
         status: s.status,
         exit_code: s.exit_code,
       };
@@ -56,25 +66,25 @@ export function RunView({
       if (e.type === "step") {
         setSteps((prev) =>
           prev[e.position]
-            ? prev // idempotent: don't wipe output on a duplicate step event
+            ? prev // idempotent: don't wipe a step we already have
             : {
                 ...prev,
                 [e.position]: {
                   position: e.position,
                   agent_name: e.agent_name,
-                  output: "",
+                  entries: [],
                   status: "running",
                   exit_code: null,
                 },
               },
         );
-      } else if (e.type === "chunk") {
-        // e.text is the full cumulative snapshot — replace, don't append.
+      } else if (e.type === "transcript") {
+        // e.entries is the full current transcript — replace, don't append.
         setSteps((prev) => ({
           ...prev,
           [e.position]: {
             ...prev[e.position],
-            output: e.text,
+            entries: e.entries as TranscriptEntry[],
           },
         }));
       } else if (e.type === "step_done") {
@@ -154,7 +164,7 @@ export function RunView({
                   : ""}
               </span>
             </div>
-            <pre className="output">{s.output || "…"}</pre>
+            <Transcript entries={s.entries} running={s.status === "running"} />
           </div>
         ))
       )}
@@ -173,4 +183,82 @@ export function RunView({
       )}
     </>
   );
+}
+
+function Transcript({
+  entries,
+  running,
+}: {
+  entries: TranscriptEntry[];
+  running: boolean;
+}) {
+  if (entries.length === 0) {
+    return <pre className="output">{running ? "…" : ""}</pre>;
+  }
+  return (
+    <div className="transcript">
+      {entries.map((e, i) => (
+        <TranscriptRow key={i} entry={e} />
+      ))}
+    </div>
+  );
+}
+
+function TranscriptRow({ entry }: { entry: TranscriptEntry }) {
+  if (entry.kind === "thinking") {
+    return (
+      <div className="tr thinking">
+        <span className="tr-icon">✽</span>
+        <span className="tr-body">{entry.text}</span>
+      </div>
+    );
+  }
+  if (entry.kind === "tool_call") {
+    const summary = toolSummary(entry.input);
+    return (
+      <div className="tr tool">
+        <span className="tr-icon">→</span>
+        <span className="tr-body">
+          <strong>{entry.name}</strong>
+          {summary && <span className="muted"> {summary}</span>}
+        </span>
+      </div>
+    );
+  }
+  if (entry.kind === "tool_result") {
+    const text = entry.content.trim();
+    if (!text) return null;
+    return (
+      <div className={`tr result${entry.isError ? " err" : ""}`}>
+        <span className="tr-icon">{entry.isError ? "✗" : "↳"}</span>
+        <span className="tr-body">{truncate(text, 500)}</span>
+      </div>
+    );
+  }
+  // text — the agent's answer
+  return (
+    <div className="tr text">
+      <span className="tr-body">{entry.text}</span>
+    </div>
+  );
+}
+
+// One-line hint for a tool call: the field that best identifies what it's doing.
+function toolSummary(input: unknown): string {
+  const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const first = [
+    o.file_path,
+    o.path,
+    o.command,
+    o.pattern,
+    o.query,
+    o.url,
+    o.description,
+    o.prompt,
+  ].find((v) => typeof v === "string" && v.length > 0);
+  return first ? truncate(String(first), 120) : "";
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) + "…" : s;
 }

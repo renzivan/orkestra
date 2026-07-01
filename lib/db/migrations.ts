@@ -115,4 +115,9 @@ export const MIGRATIONS: string[][] = [
     `ALTER TABLE agents ADD COLUMN model TEXT NOT NULL DEFAULT 'sonnet'`,
     `ALTER TABLE agents ADD COLUMN effort TEXT NOT NULL DEFAULT ''`,
   ],
+
+  // v3 — live transcript per step: a JSON array of activity entries (thinking,
+  // tool calls, tool results, answer text) streamed and rendered as the step
+  // runs. `output` remains the clean answer text chained into the next agent.
+  [`ALTER TABLE run_steps ADD COLUMN transcript TEXT NOT NULL DEFAULT '[]'`],
 ];

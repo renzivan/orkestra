@@ -72,5 +72,5 @@ test("stream replays a finished run and emits a done event", async () => {
   const events = await collectEvents(res.body!);
   const done = events.find((e) => e.type === "done");
   expect(done?.status).toBe("succeeded");
-  expect(events.some((e) => e.type === "chunk")).toBe(true);
+  expect(events.some((e) => e.type === "transcript")).toBe(true);
 });

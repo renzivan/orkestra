@@ -66,6 +66,8 @@ export interface RunStep {
   agent_name: string;
   input: string;
   output: string;
+  /** JSON array of TranscriptEntry (lib/engine/transcript) — live step activity. */
+  transcript: string;
   exit_code: number | null;
   error: string | null;
   status: RunStatus;

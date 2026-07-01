@@ -1,8 +1,13 @@
+import { passthrough, type StreamTransform } from "./transcript";
+
 export interface RunStepOptions {
   argv: string[];
   input: string;
   timeoutMs: number;
   onChunk?: (text: string) => void;
+  /** Converts raw stdout into clean text (e.g. parse stream-json). Default:
+   *  passthrough. Stateful — pass a fresh one per call. */
+  transform?: StreamTransform;
 }
 
 export interface RunStepResult {
@@ -33,7 +38,7 @@ export async function runStep(opts: RunStepOptions): Promise<RunStepResult> {
   // Drain stdout and stderr concurrently — reading one fully before the other
   // can deadlock a child that fills the unread pipe's buffer.
   const [stdout, stderr] = await Promise.all([
-    readStream(proc.stdout, opts.onChunk),
+    readStream(proc.stdout, opts.onChunk, opts.transform ?? passthrough()),
     readStream(proc.stderr),
   ]);
   const rawCode = await proc.exited;
@@ -48,18 +53,23 @@ export async function runStep(opts: RunStepOptions): Promise<RunStepResult> {
 async function readStream(
   stream: ReadableStream<Uint8Array>,
   onChunk?: (text: string) => void,
+  transform: StreamTransform = passthrough(),
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let out = "";
+  const emit = (text: string) => {
+    if (!text) return;
+    out += text;
+    if (onChunk) onChunk(text);
+  };
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const text = decoder.decode(value, { stream: true });
-      out += text;
-      if (onChunk && text) onChunk(text);
+      emit(transform.push(decoder.decode(value, { stream: true })));
     }
+    emit(transform.end());
   } finally {
     reader.releaseLock();
   }

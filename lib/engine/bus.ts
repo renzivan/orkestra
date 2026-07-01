@@ -1,15 +1,28 @@
 // In-memory pub/sub for live run output. Subscribers (the SSE endpoint) get
-// events published by the runner as a run progresses. Process-local only.
+// events published by the runner as a run progresses.
+//
+// The listener registry is pinned on globalThis, NOT a plain module-level
+// const. Next.js compiles Server Actions and Route Handlers into separate
+// bundles with their own module instances, so a module-level Map would give
+// the runner (invoked from a Server Action) a *different* Map than the SSE
+// Route Handler subscribes to — the runner would publish into a bus with zero
+// listeners and no live event would ever reach the browser. globalThis is the
+// one registry shared across every bundle in the process.
+
+import type { TranscriptEntry } from "./transcript";
 
 export type RunEvent =
   | { type: "step"; position: number; agent_name: string; step_id: number }
-  | { type: "chunk"; position: number; text: string }
+  | { type: "transcript"; position: number; entries: TranscriptEntry[] }
   | { type: "step_done"; position: number; status: string; exit_code: number | null }
   | { type: "done"; status: string };
 
 type Listener = (event: RunEvent) => void;
 
-const listeners = new Map<number, Set<Listener>>();
+const g = globalThis as typeof globalThis & {
+  __orkestraBus?: Map<number, Set<Listener>>;
+};
+const listeners: Map<number, Set<Listener>> = (g.__orkestraBus ??= new Map());
 
 export function subscribe(runId: number, fn: Listener): () => void {
   let set = listeners.get(runId);

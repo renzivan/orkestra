@@ -1,8 +1,18 @@
 import { db } from "@/lib/db";
 import { getRunWithSteps } from "@/lib/repos/runs";
 import { subscribe, type RunEvent } from "@/lib/engine/bus";
+import type { TranscriptEntry } from "@/lib/engine/transcript";
 
 export const dynamic = "force-dynamic";
+
+function parseTranscript(json: string): TranscriptEntry[] {
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? (v as TranscriptEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function GET(
   req: Request,
@@ -53,6 +63,8 @@ export async function GET(
       });
 
       // Replay whatever is already persisted so a late subscriber catches up.
+      // The transcript is a full snapshot and the client handlers are
+      // idempotent, so replay + buffered live events can't double-count.
       const run = getRunWithSteps(db(), runId);
       for (const s of run.steps) {
         send({
@@ -61,8 +73,9 @@ export async function GET(
           agent_name: s.agent_name,
           step_id: s.id,
         });
-        if (s.output) {
-          send({ type: "chunk", position: s.position, text: s.output });
+        const entries = parseTranscript(s.transcript);
+        if (entries.length > 0) {
+          send({ type: "transcript", position: s.position, entries });
         }
         if (s.status !== "running") {
           send({

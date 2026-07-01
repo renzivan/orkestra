@@ -82,6 +82,23 @@ export function clearStepOutput(db: Database, stepId: number): void {
   db.query("UPDATE run_steps SET output = '' WHERE id = ?").run(stepId);
 }
 
+/** Persist the step's live transcript (JSON) so a reload mid-run catches up. */
+export function setStepTranscript(
+  db: Database,
+  stepId: number,
+  transcript: string,
+): void {
+  db.query("UPDATE run_steps SET transcript = $t WHERE id = $id").run({
+    $id: stepId,
+    $t: transcript,
+  });
+}
+
+/** Reset a step's transcript before a retry attempt. */
+export function clearStepTranscript(db: Database, stepId: number): void {
+  db.query("UPDATE run_steps SET transcript = '[]' WHERE id = ?").run(stepId);
+}
+
 /**
  * Mark any run/step/task left in 'running' as failed. Called on startup so a
  * process that crashed mid-run doesn't leave rows stuck forever.

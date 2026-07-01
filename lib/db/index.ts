@@ -40,15 +40,20 @@ function defaultDbPath(): string {
   return join(dir, "orkestra.db");
 }
 
-let _db: Database | null = null;
+// Pinned on globalThis, not a module-level let: Next.js gives Server Actions
+// and Route Handlers separate module instances, so a plain module singleton
+// would open a *second* connection per bundle. Each openDb() runs
+// reconcileStaleRuns(), which would mark a genuinely-running run (started in
+// another bundle) as failed. One shared connection avoids that.
+const g = globalThis as typeof globalThis & { __orkestraDb?: Database };
 
 /** Shared process-wide connection for the app (lazy). */
 export function db(): Database {
-  return (_db ??= openDb());
+  return (g.__orkestraDb ??= openDb());
 }
 
 /** Test hook: drop the cached connection so the next db() re-opens. */
 export function resetDb(): void {
-  _db?.close();
-  _db = null;
+  g.__orkestraDb?.close();
+  g.__orkestraDb = undefined;
 }
