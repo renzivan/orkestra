@@ -102,8 +102,8 @@ export async function pickDirectory(): Promise<{ path: string | null }> {
   return { path: stdout.trim().replace(/\/+$/, "") };
 }
 
-// Models are built-in presets synced from installed CLIs (see lib/models/sync.ts);
-// they have no create/edit/delete UI.
+// Adapters are built-in presets synced from installed CLIs (see
+// lib/adapters/sync.ts); they have no create/edit/delete UI.
 
 // ---- Agents ----
 export async function saveAgent(input: {

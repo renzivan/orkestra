@@ -10,14 +10,17 @@ const PRESETS: AdapterPreset[] = [
     name: "claude",
     bin: "claude",
     command: "claude -p {system}",
-    models: ["opus", "sonnet"],
+    models: [
+      { value: "opus", label: "Opus 4.8" },
+      { value: "sonnet", label: "Sonnet 5" },
+    ],
     efforts: ["off", "high"],
   },
   {
     name: "codex",
     bin: "codex",
     command: "codex {input}",
-    models: ["gpt"],
+    models: [{ value: "gpt", label: "GPT" }],
     efforts: ["off"],
   },
 ];

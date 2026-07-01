@@ -9,7 +9,7 @@ import { useConfirm } from "../confirm-dialog";
 export interface AdapterChoice {
   id: number;
   name: string;
-  models: string[];
+  models: { value: string; label: string }[];
   efforts: string[];
 }
 
@@ -51,7 +51,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
   function chooseAdapter(id: number | null) {
     setAdapterId(id);
     const a = adapters.find((x) => x.id === id);
-    setModel(a?.models[0] ?? "");
+    setModel(a?.models[0]?.value ?? "");
     setEffort(a?.efforts[0] ?? "off");
   }
 
@@ -72,6 +72,10 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
   }
   function adapterName(id: number) {
     return adapters.find((a) => a.id === id)?.name ?? "—";
+  }
+  function modelLabel(adapterId: number, value: string) {
+    const a = adapters.find((x) => x.id === adapterId);
+    return a?.models.find((m) => m.value === value)?.label ?? value;
   }
 
   function addSkill(id: number) {
@@ -202,8 +206,8 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
                 onChange={(e) => setModel(e.target.value)}
               >
                 {(selectedAdapter?.models ?? []).map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                  <option key={m.value} value={m.value}>
+                    {m.label}
                   </option>
                 ))}
               </select>
@@ -340,7 +344,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
                     <strong>{a.name}</strong>
                   </td>
                   <td className="muted">
-                    {adapterName(a.adapter_id)} · {a.model}
+                    {adapterName(a.adapter_id)} · {modelLabel(a.adapter_id, a.model)}
                     {a.effort && a.effort !== "off" ? ` · ${a.effort}` : ""}
                   </td>
                   <td className="muted">

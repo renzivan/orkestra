@@ -24,6 +24,7 @@ export function openDb(path?: string): Database {
 function runMigrations(db: Database): void {
   const row = db.query("PRAGMA user_version").get() as { user_version: number };
   const current = row.user_version;
+  if (current >= MIGRATIONS.length) return;
   for (let v = current; v < MIGRATIONS.length; v++) {
     for (const stmt of MIGRATIONS[v]) db.exec(stmt);
   }
