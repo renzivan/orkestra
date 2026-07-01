@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Agent, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
@@ -14,41 +15,34 @@ export interface AdapterChoice {
 }
 
 interface Props {
-  agents: Agent[];
+  /** The agent to edit, or null to create a new one. */
+  agent: Agent | null;
   adapters: AdapterChoice[];
   skills: Skill[];
   projects: Project[];
 }
 
-export function AgentsClient({ agents, adapters, skills, projects }: Props) {
+export function AgentForm({ agent, adapters, skills, projects }: Props) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
-  const [editing, setEditing] = useState<Agent | null>(null);
-  const [name, setName] = useState("");
-  const [base, setBase] = useState("");
-  const [adapterId, setAdapterId] = useState<number | null>(null);
-  const [model, setModel] = useState("");
-  const [effort, setEffort] = useState("off");
-  const [skipPerms, setSkipPerms] = useState(true);
-  const [skillIds, setSkillIds] = useState<number[]>([]);
-  const [projectIds, setProjectIds] = useState<number[]>([]);
+  const [name, setName] = useState(agent?.name ?? "");
+  const [base, setBase] = useState(agent?.base_instruction ?? "");
+  const [adapterId, setAdapterId] = useState<number | null>(
+    agent?.adapter_id ?? null,
+  );
+  const [model, setModel] = useState(agent?.model ?? "");
+  const [effort, setEffort] = useState(agent?.effort || "off");
+  const [skipPerms, setSkipPerms] = useState(agent?.skip_permissions ?? true);
+  const [skillIds, setSkillIds] = useState<number[]>(
+    agent?.skills.map((s) => s.id) ?? [],
+  );
+  const [projectIds, setProjectIds] = useState<number[]>(
+    agent?.projects.map((p) => p.id) ?? [],
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const selectedAdapter = adapters.find((a) => a.id === adapterId) ?? null;
-
-  function reset() {
-    setEditing(null);
-    setName("");
-    setBase("");
-    setAdapterId(null);
-    setModel("");
-    setEffort("off");
-    setSkipPerms(true);
-    setSkillIds([]);
-    setProjectIds([]);
-    setError("");
-  }
 
   function chooseAdapter(id: number | null) {
     setAdapterId(id);
@@ -57,28 +51,8 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
     setEffort(a?.efforts[0] ?? "off");
   }
 
-  function startEdit(a: Agent) {
-    setEditing(a);
-    setName(a.name);
-    setBase(a.base_instruction);
-    setAdapterId(a.adapter_id);
-    setModel(a.model);
-    setEffort(a.effort || "off");
-    setSkipPerms(a.skip_permissions);
-    setSkillIds(a.skills.map((s) => s.id));
-    setProjectIds(a.projects.map((p) => p.id));
-    setError("");
-  }
-
   function skillName(id: number) {
     return skills.find((s) => s.id === id)?.name ?? `#${id}`;
-  }
-  function adapterName(id: number) {
-    return adapters.find((a) => a.id === id)?.name ?? "—";
-  }
-  function modelLabel(adapterId: number, value: string) {
-    const a = adapters.find((x) => x.id === adapterId);
-    return a?.models.find((m) => m.value === value)?.label ?? value;
   }
 
   function addSkill(id: number) {
@@ -109,8 +83,8 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
     if (!model) return setError("A model is required.");
     setBusy(true);
     try {
-      await saveAgent({
-        id: editing?.id,
+      const row = await saveAgent({
+        id: agent?.id,
         name: name.trim(),
         base_instruction: base,
         adapter_id: adapterId,
@@ -120,8 +94,12 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
         skill_ids: skillIds,
         project_ids: projectIds,
       });
-      reset();
-      router.refresh();
+      if (agent) {
+        router.refresh();
+      } else {
+        // New agent — jump to its own page.
+        router.push(`/agents/${row.id}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -129,18 +107,19 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
     }
   }
 
-  async function remove(a: Agent) {
+  async function remove() {
+    if (!agent) return;
     if (
       !(await confirm({
         title: "Delete agent",
-        message: `Delete "${a.name}"? This can't be undone.`,
+        message: `Delete "${agent.name}"? This can't be undone.`,
       }))
     )
       return;
     setError("");
-    const res = await deleteAgentAction(a.id);
+    const res = await deleteAgentAction(agent.id);
     if (!res.ok) return setError(res.error);
-    if (editing?.id === a.id) reset();
+    router.push("/agents/new");
     router.refresh();
   }
 
@@ -152,9 +131,20 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
       {dialog}
       <div className="page-head">
         <div>
-          <h1>Agents</h1>
-          <p>Base instruction + optional skills + projects, running on an adapter.</p>
+          <Link href="/tasks" className="muted">
+            ← Home
+          </Link>
+          <h1 style={{ marginTop: 8 }}>{agent ? agent.name : "New agent"}</h1>
+          <p>
+            Base instruction + optional skills + projects, running on an
+            adapter.
+          </p>
         </div>
+        {agent && (
+          <button className="btn small danger" onClick={remove} disabled={busy}>
+            Delete
+          </button>
+        )}
       </div>
 
       {noAdapters && (
@@ -168,7 +158,6 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
 
       <div className="card">
         <div className="stack">
-          <h3 style={{ margin: 0 }}>{editing ? "Edit agent" : "New agent"}</h3>
           <div>
             <label>Name</label>
             <input
@@ -277,7 +266,10 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
                     >
                       ↓
                     </button>
-                    <button className="btn small danger" onClick={() => removeSkill(id)}>
+                    <button
+                      className="btn small danger"
+                      onClick={() => removeSkill(id)}
+                    >
                       Remove
                     </button>
                   </div>
@@ -332,64 +324,16 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
 
           {error && <div className="error">{error}</div>}
           <div className="row">
-            <button className="btn primary" onClick={save} disabled={busy || noAdapters}>
-              {editing ? "Save changes" : "Add agent"}
+            <button
+              className="btn primary"
+              onClick={save}
+              disabled={busy || noAdapters}
+            >
+              {agent ? "Save changes" : "Add agent"}
             </button>
-            {editing && (
-              <button className="btn" onClick={reset} disabled={busy}>
-                Cancel
-              </button>
-            )}
           </div>
         </div>
       </div>
-
-      {agents.length === 0 ? (
-        <div className="empty">No agents yet.</div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Adapter · Model · Effort</th>
-                <th>Skills</th>
-                <th>Projects</th>
-                <th style={{ width: 140 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <strong>{a.name}</strong>
-                  </td>
-                  <td className="muted">
-                    {adapterName(a.adapter_id)} · {modelLabel(a.adapter_id, a.model)}
-                    {a.effort && a.effort !== "off" ? ` · ${a.effort}` : ""}
-                  </td>
-                  <td className="muted">
-                    {a.skills.map((s) => s.name).join(", ") || "—"}
-                  </td>
-                  <td className="muted">
-                    {a.projects.map((p) => p.name).join(", ") || "—"}
-                  </td>
-                  <td>
-                    <div className="row" style={{ gap: 8 }}>
-                      <button className="btn small" onClick={() => startEdit(a)}>
-                        Edit
-                      </button>
-                      <button className="btn small danger" onClick={() => remove(a)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </>
   );
 }

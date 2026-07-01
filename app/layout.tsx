@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import { db } from "@/lib/db";
+import { listAgents } from "@/lib/repos/agents";
 import { Nav } from "./nav";
 
 export const metadata: Metadata = {
@@ -8,9 +10,13 @@ export const metadata: Metadata = {
   description: "Local agent orchestrator",
 };
 
+// The sidebar lists agents, so the layout reads them on each request.
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const agents = listAgents(db()).map((a) => ({ id: a.id, name: a.name }));
   return (
     <html lang="en">
       <body>
@@ -20,7 +26,7 @@ export default function RootLayout({
               <span className="dot" />
               Orkestra
             </Link>
-            <Nav />
+            <Nav agents={agents} />
           </aside>
           <main className="content">{children}</main>
         </div>
