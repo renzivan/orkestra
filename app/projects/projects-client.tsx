@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/types";
 import { saveProject, deleteProjectAction, pickDirectory } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 
 export function ProjectsClient({ projects }: { projects: Project[] }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [editing, setEditing] = useState<Project | null>(null);
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
@@ -59,6 +61,13 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
   }
 
   async function remove(p: Project) {
+    if (
+      !(await confirm({
+        title: "Delete project",
+        message: `Delete "${p.name}"? This can't be undone.`,
+      }))
+    )
+      return;
     setError("");
     const res = await deleteProjectAction(p.id);
     if (!res.ok) return setError(res.error);
@@ -68,6 +77,7 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
 
   return (
     <>
+      {dialog}
       <div className="page-head">
         <div>
           <h1>Projects</h1>

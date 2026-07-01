@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent, Flow } from "@/lib/types";
 import { saveFlow, deleteFlowAction } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 
 export function FlowsClient({
   flows,
@@ -13,6 +14,7 @@ export function FlowsClient({
   agents: Agent[];
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [editing, setEditing] = useState<Flow | null>(null);
   const [name, setName] = useState("");
   const [agentIds, setAgentIds] = useState<number[]>([]);
@@ -60,6 +62,13 @@ export function FlowsClient({
   }
 
   async function remove(f: Flow) {
+    if (
+      !(await confirm({
+        title: "Delete flow",
+        message: `Delete "${f.name}"? This can't be undone.`,
+      }))
+    )
+      return;
     setError("");
     const res = await deleteFlowAction(f.id);
     if (!res.ok) return setError(res.error);
@@ -71,6 +80,7 @@ export function FlowsClient({
 
   return (
     <>
+      {dialog}
       <div className="page-head">
         <div>
           <h1>Flows</h1>

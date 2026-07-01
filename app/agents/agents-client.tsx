@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent, Model, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 
 interface Props {
   agents: Agent[];
@@ -14,6 +15,7 @@ interface Props {
 
 export function AgentsClient({ agents, models, skills, projects }: Props) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [editing, setEditing] = useState<Agent | null>(null);
   const [name, setName] = useState("");
   const [base, setBase] = useState("");
@@ -92,6 +94,13 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
   }
 
   async function remove(a: Agent) {
+    if (
+      !(await confirm({
+        title: "Delete agent",
+        message: `Delete "${a.name}"? This can't be undone.`,
+      }))
+    )
+      return;
     setError("");
     const res = await deleteAgentAction(a.id);
     if (!res.ok) return setError(res.error);
@@ -104,6 +113,7 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
 
   return (
     <>
+      {dialog}
       <div className="page-head">
         <div>
           <h1>Agents</h1>
@@ -114,7 +124,8 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
       {noModels && (
         <div className="card">
           <div className="muted">
-            Create a <a href="/models">model</a> first — an agent needs one to run.
+            No model available. Models are detected from installed CLIs — install
+            the <code>claude</code> CLI (on your PATH), then reload this page.
           </div>
         </div>
       )}

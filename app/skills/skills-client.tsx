@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Skill } from "@/lib/types";
 import { saveSkill, deleteSkillAction } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 
 export function SkillsClient({ skills }: { skills: Skill[] }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [editing, setEditing] = useState<Skill | null>(null);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
@@ -42,6 +44,13 @@ export function SkillsClient({ skills }: { skills: Skill[] }) {
   }
 
   async function remove(s: Skill) {
+    if (
+      !(await confirm({
+        title: "Delete skill",
+        message: `Delete "${s.name}"? This can't be undone.`,
+      }))
+    )
+      return;
     setError("");
     const res = await deleteSkillAction(s.id);
     if (!res.ok) return setError(res.error);
@@ -51,6 +60,7 @@ export function SkillsClient({ skills }: { skills: Skill[] }) {
 
   return (
     <>
+      {dialog}
       <div className="page-head">
         <div>
           <h1>Skills</h1>
