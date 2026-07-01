@@ -49,6 +49,7 @@ export function RunView({
     setSteps({});
     const es = new EventSource(`/api/runs/${initialRun.id}/stream`);
     esRef.current = es;
+    let finished = false;
 
     es.onmessage = (ev) => {
       const e = JSON.parse(ev.data);
@@ -86,12 +87,18 @@ export function RunView({
           },
         }));
       } else if (e.type === "done") {
+        finished = true;
         setRunStatus(e.status);
         es.close();
         router.refresh();
       }
     };
-    es.onerror = () => es.close();
+    // While the run is active, let EventSource auto-reconnect on a transient
+    // drop — the stream replays persisted state and the handlers are idempotent.
+    // Only stop trying once we've seen the terminal 'done' event.
+    es.onerror = () => {
+      if (finished) es.close();
+    };
 
     return () => es.close();
   }, [initialRun, router]);
