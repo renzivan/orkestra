@@ -51,12 +51,24 @@ export async function runTask(
         step_id: stepId,
       });
 
+      // Chunk events carry the full cumulative output (idempotent snapshot),
+      // so replay + live delivery can't double-count. Output is also persisted
+      // incrementally so a late subscriber / reload sees progress.
+      let acc = "";
       const result = await attemptWithRetries(
         argv,
         input,
         settings.step_timeout_seconds * 1000,
         settings.retries,
-        (chunk) => publish(run.id, { type: "chunk", position: pos, text: chunk }),
+        (delta) => {
+          acc += delta;
+          Runs.appendStepOutput(db, stepId, delta);
+          publish(run.id, { type: "chunk", position: pos, text: acc });
+        },
+        () => {
+          acc = "";
+          Runs.clearStepOutput(db, stepId);
+        },
       );
 
       if (result.exitCode === 0 && !result.timedOut) {
@@ -130,11 +142,14 @@ async function attemptWithRetries(
   timeoutMs: number,
   retries: number,
   onChunk: (text: string) => void,
+  beforeAttempt: () => void,
 ) {
+  beforeAttempt();
   let result = await runStep({ argv, input, timeoutMs, onChunk });
   let left = retries;
   while (left > 0 && (result.exitCode !== 0 || result.timedOut)) {
     left--;
+    beforeAttempt();
     result = await runStep({ argv, input, timeoutMs, onChunk });
   }
   return result;

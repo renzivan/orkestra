@@ -77,6 +77,32 @@ export function appendStepOutput(
   ).run({ $id: stepId, $chunk: chunk });
 }
 
+/** Reset a step's output before a retry attempt. */
+export function clearStepOutput(db: Database, stepId: number): void {
+  db.query("UPDATE run_steps SET output = '' WHERE id = ?").run(stepId);
+}
+
+/**
+ * Mark any run/step/task left in 'running' as failed. Called on startup so a
+ * process that crashed mid-run doesn't leave rows stuck forever.
+ */
+export function reconcileStaleRuns(db: Database): void {
+  const now = new Date().toISOString();
+  db.query(
+    `UPDATE run_steps SET status='failed',
+       error=COALESCE(error,'interrupted'), finished_at=$now
+     WHERE status='running'`,
+  ).run({ $now: now });
+  db.query(
+    `UPDATE runs SET status='failed',
+       error=COALESCE(error,'interrupted'), finished_at=$now
+     WHERE status='running'`,
+  ).run({ $now: now });
+  db.query(
+    "UPDATE tasks SET status='failed', updated_at=$now WHERE status='running'",
+  ).run({ $now: now });
+}
+
 export interface RunResult {
   status: RunStatus;
   final_output: string | null;

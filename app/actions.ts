@@ -32,11 +32,26 @@ function tryDelete(fn: () => void, path: string): DeleteResult {
   }
 }
 
+/** Translate raw SQLite unique-constraint errors into a friendly message. */
+function withFriendly<T>(kind: string, fn: () => T): T {
+  try {
+    return fn();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/UNIQUE constraint/i.test(msg)) {
+      throw new Error(`A ${kind} with that name already exists.`);
+    }
+    throw e instanceof Error ? e : new Error(msg);
+  }
+}
+
 // ---- Skills ----
 export async function saveSkill(input: { id?: number; name: string; body: string }) {
-  const row = input.id
-    ? Skills.updateSkill(db(), input.id, input)
-    : Skills.createSkill(db(), input);
+  const row = withFriendly("skill", () =>
+    input.id
+      ? Skills.updateSkill(db(), input.id!, input)
+      : Skills.createSkill(db(), input),
+  );
   revalidate("/skills");
   return row;
 }
@@ -46,9 +61,11 @@ export async function deleteSkillAction(id: number): Promise<DeleteResult> {
 
 // ---- Projects ----
 export async function saveProject(input: { id?: number; name: string; path: string }) {
-  const row = input.id
-    ? Projects.updateProject(db(), input.id, input)
-    : Projects.createProject(db(), input);
+  const row = withFriendly("project", () =>
+    input.id
+      ? Projects.updateProject(db(), input.id!, input)
+      : Projects.createProject(db(), input),
+  );
   revalidate("/projects");
   return row;
 }
@@ -58,9 +75,11 @@ export async function deleteProjectAction(id: number): Promise<DeleteResult> {
 
 // ---- Models ----
 export async function saveModel(input: { id?: number; name: string; command: string }) {
-  const row = input.id
-    ? Models.updateModel(db(), input.id, input)
-    : Models.createModel(db(), input);
+  const row = withFriendly("model", () =>
+    input.id
+      ? Models.updateModel(db(), input.id!, input)
+      : Models.createModel(db(), input),
+  );
   revalidate("/models");
   return row;
 }
@@ -77,9 +96,11 @@ export async function saveAgent(input: {
   skill_ids: number[];
   project_ids: number[];
 }) {
-  const row = input.id
-    ? Agents.updateAgent(db(), input.id, input)
-    : Agents.createAgent(db(), input);
+  const row = withFriendly("agent", () =>
+    input.id
+      ? Agents.updateAgent(db(), input.id!, input)
+      : Agents.createAgent(db(), input),
+  );
   revalidate("/agents");
   return row;
 }
@@ -93,9 +114,11 @@ export async function saveFlow(input: {
   name: string;
   agent_ids: number[];
 }) {
-  const row = input.id
-    ? Flows.updateFlow(db(), input.id, input)
-    : Flows.createFlow(db(), input);
+  const row = withFriendly("flow", () =>
+    input.id
+      ? Flows.updateFlow(db(), input.id!, input)
+      : Flows.createFlow(db(), input),
+  );
   revalidate("/flows");
   return row;
 }

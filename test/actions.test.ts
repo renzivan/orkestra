@@ -71,5 +71,5 @@ test("deleting a referenced skill returns an error object", async () => {
 
   const res = await A.deleteSkillAction(skill.id);
   expect(res.ok).toBe(false);
-  expect(res.error).toMatch(/referenced/i);
+  if (!res.ok) expect(res.error).toMatch(/referenced/i);
 });

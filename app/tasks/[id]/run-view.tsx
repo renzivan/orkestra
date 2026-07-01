@@ -53,22 +53,27 @@ export function RunView({
     es.onmessage = (ev) => {
       const e = JSON.parse(ev.data);
       if (e.type === "step") {
-        setSteps((prev) => ({
-          ...prev,
-          [e.position]: {
-            position: e.position,
-            agent_name: e.agent_name,
-            output: "",
-            status: "running",
-            exit_code: null,
-          },
-        }));
+        setSteps((prev) =>
+          prev[e.position]
+            ? prev // idempotent: don't wipe output on a duplicate step event
+            : {
+                ...prev,
+                [e.position]: {
+                  position: e.position,
+                  agent_name: e.agent_name,
+                  output: "",
+                  status: "running",
+                  exit_code: null,
+                },
+              },
+        );
       } else if (e.type === "chunk") {
+        // e.text is the full cumulative snapshot — replace, don't append.
         setSteps((prev) => ({
           ...prev,
           [e.position]: {
             ...prev[e.position],
-            output: (prev[e.position]?.output ?? "") + e.text,
+            output: e.text,
           },
         }));
       } else if (e.type === "step_done") {

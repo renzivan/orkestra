@@ -27,11 +27,15 @@ export async function runStep(opts: RunStepOptions): Promise<RunStepResult> {
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    proc.kill();
+    proc.kill("SIGKILL"); // force-kill a hung process
   }, opts.timeoutMs);
 
-  const stdout = await readStream(proc.stdout, opts.onChunk);
-  const stderr = await readStream(proc.stderr);
+  // Drain stdout and stderr concurrently — reading one fully before the other
+  // can deadlock a child that fills the unread pipe's buffer.
+  const [stdout, stderr] = await Promise.all([
+    readStream(proc.stdout, opts.onChunk),
+    readStream(proc.stderr),
+  ]);
   const rawCode = await proc.exited;
   clearTimeout(timer);
 

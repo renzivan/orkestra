@@ -29,6 +29,29 @@ export async function GET(
         }
       };
 
+      // Subscribe FIRST (buffering) so no event published during replay is
+      // lost. Chunk events carry the full cumulative snapshot, and the client
+      // handlers are idempotent, so replay + buffered live events can't
+      // double-count. Flush the buffer once replay is done.
+      let replayed = false;
+      const buffered: RunEvent[] = [];
+      const deliver = (event: RunEvent) => {
+        send(event);
+        if (event.type === "done") {
+          unsub();
+          close();
+        }
+      };
+      const unsub = subscribe(runId, (event) => {
+        if (replayed) deliver(event);
+        else buffered.push(event);
+      });
+
+      req.signal?.addEventListener("abort", () => {
+        unsub();
+        close();
+      });
+
       // Replay whatever is already persisted so a late subscriber catches up.
       const run = getRunWithSteps(db(), runId);
       for (const s of run.steps) {
@@ -52,23 +75,14 @@ export async function GET(
       }
 
       if (run.status !== "running") {
+        unsub();
         send({ type: "done", status: run.status });
         close();
         return;
       }
 
-      const unsub = subscribe(runId, (event) => {
-        send(event);
-        if (event.type === "done") {
-          unsub();
-          close();
-        }
-      });
-
-      req.signal?.addEventListener("abort", () => {
-        unsub();
-        close();
-      });
+      replayed = true;
+      for (const event of buffered) deliver(event);
     },
   });
 

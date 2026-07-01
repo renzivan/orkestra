@@ -3,6 +3,7 @@ import { homedir } from "os";
 import { mkdirSync } from "fs";
 import { join } from "path";
 import { MIGRATIONS } from "./migrations";
+import { reconcileStaleRuns } from "../repos/runs";
 
 /**
  * Open a SQLite database and run all migrations.
@@ -15,6 +16,8 @@ export function openDb(path?: string): Database {
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   for (const stmt of MIGRATIONS) db.exec(stmt);
+  // A previous process may have died mid-run — clear any stuck 'running' rows.
+  reconcileStaleRuns(db);
   return db;
 }
 
