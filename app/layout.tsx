@@ -3,20 +3,31 @@ import Link from "next/link";
 import "./globals.css";
 import { db } from "@/lib/db";
 import { listAgents } from "@/lib/repos/agents";
-import { Nav } from "./nav";
+import { listFlows } from "@/lib/repos/flows";
+import { listSkills } from "@/lib/repos/skills";
+import { listProjects } from "@/lib/repos/projects";
+import { Nav, type NavGroup } from "./nav";
 
 export const metadata: Metadata = {
   title: "Orkestra",
   description: "Local agent orchestrator",
 };
 
-// The sidebar lists agents, so the layout reads them on each request.
+// The sidebar lists live records, so the layout reads them on each request.
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const agents = listAgents(db()).map((a) => ({ id: a.id, name: a.name }));
+  const database = db();
+  const named = <T extends { id: number; name: string }>(rows: T[]) =>
+    rows.map((r) => ({ id: r.id, name: r.name }));
+  const groups: NavGroup[] = [
+    { title: "Projects", base: "/projects", items: named(listProjects(database)) },
+    { title: "Flows", base: "/flows", items: named(listFlows(database)) },
+    { title: "Agents", base: "/agents", items: named(listAgents(database)) },
+    { title: "Skills", base: "/skills", items: named(listSkills(database)) },
+  ];
   return (
     <html lang="en">
       <body>
@@ -26,7 +37,7 @@ export default function RootLayout({
               <span className="dot" />
               Orkestra
             </Link>
-            <Nav agents={agents} />
+            <Nav groups={groups} />
           </aside>
           <main className="content">{children}</main>
         </div>

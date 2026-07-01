@@ -1,13 +1,6 @@
-import { db } from "@/lib/db";
-import { listFlows } from "@/lib/repos/flows";
-import { listAgents } from "@/lib/repos/agents";
-import { FlowsClient } from "./flows-client";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// Flows live in the sidebar now; /flows opens the new-flow form.
 export default function FlowsPage() {
-  const database = db();
-  return (
-    <FlowsClient flows={listFlows(database)} agents={listAgents(database)} />
-  );
+  redirect("/flows/new");
 }

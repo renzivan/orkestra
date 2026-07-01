@@ -3,7 +3,7 @@
   --panel: #ffffff;
   --fg: #141413;
   --muted: #6b6862;
-  --accent: #d97757;
+  --accent: #ffe9e2;
   --accent-ink: #8f3f26;
   --line: #e8e5dd;
   --line-strong: #d9d5ca;
@@ -88,12 +88,14 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* lighter than --muted, for section titles and icons */
+  --nav-dim: color-mix(in srgb, var(--muted) 60%, #f5f3ec);
 }
 .nav a {
   color: var(--fg);
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-md);
-  font-weight: 500;
+  font-weight: 400;
 }
 .nav a:hover {
   background: #ece9e0;
@@ -101,7 +103,19 @@ a:hover {
 }
 .nav a.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--fg);
+}
+.nav-icon-link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.nav-icon {
+  flex: none;
+  color: var(--nav-dim);
+}
+.nav-icon-link.active .nav-icon {
+  color: var(--fg);
 }
 
 /* collapsible agents group */
@@ -128,23 +142,37 @@ a:hover {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--nav-dim);
   text-align: left;
 }
 .nav-group-toggle:hover {
   background: #ece9e0;
 }
+/* static section header: no caret, always shown; aligns with toggle labels */
+.nav-group-label {
+  display: block;
+  padding: var(--s-2) var(--s-3);
+  padding-left: calc(var(--s-3) + 22px);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nav-dim);
+}
 .nav-caret {
   display: inline-block;
-  font-size: 9px;
+  width: 16px;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
   transition: transform 0.12s ease;
-  color: var(--muted);
+  color: var(--nav-dim);
 }
 .nav-caret.open {
   transform: rotate(90deg);
 }
-.nav-add {
-  color: var(--muted);
+.nav .nav-add {
+  color: var(--nav-dim);
   font-size: 16px;
   line-height: 1;
   padding: 2px 8px;
@@ -163,9 +191,10 @@ a:hover {
 }
 .nav-sub a {
   color: var(--fg);
+  margin-left: 22px;
   padding: 6px var(--s-3);
   border-radius: var(--r-md);
-  font-weight: 500;
+  font-weight: 400;
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -177,9 +206,10 @@ a:hover {
 }
 .nav-sub a.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--fg);
 }
 .nav-empty {
+  margin-left: 22px;
   padding: 6px var(--s-3);
   font-size: 13px;
   color: var(--muted);
@@ -262,7 +292,7 @@ select:focus {
 }
 .btn {
   font: inherit;
-  font-weight: 600;
+  font-weight: 400;
   border: 1px solid var(--line-strong);
   background: #fff;
   color: var(--fg);
@@ -276,10 +306,11 @@ select:focus {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--fg);
 }
 .btn.primary:hover {
-  background: #c9694b;
+  background: #ffdcd0;
+  border-color: #ffdcd0;
 }
 .btn.danger {
   color: var(--danger);

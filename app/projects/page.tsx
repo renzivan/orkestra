@@ -1,10 +1,6 @@
-import { db } from "@/lib/db";
-import { listProjects } from "@/lib/repos/projects";
-import { ProjectsClient } from "./projects-client";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// Projects live in the sidebar now; /projects opens the new-project form.
 export default function ProjectsPage() {
-  const projects = listProjects(db());
-  return <ProjectsClient projects={projects} />;
+  redirect("/projects/new");
 }

@@ -6,28 +6,13 @@ import type { Project } from "@/lib/types";
 import { saveProject, deleteProjectAction, pickDirectory } from "../actions";
 import { useConfirm } from "../confirm-dialog";
 
-export function ProjectsClient({ projects }: { projects: Project[] }) {
+export function ProjectForm({ project }: { project: Project | null }) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
-  const [editing, setEditing] = useState<Project | null>(null);
-  const [name, setName] = useState("");
-  const [path, setPath] = useState("");
+  const [name, setName] = useState(project?.name ?? "");
+  const [path, setPath] = useState(project?.path ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  function reset() {
-    setEditing(null);
-    setName("");
-    setPath("");
-    setError("");
-  }
-
-  function startEdit(p: Project) {
-    setEditing(p);
-    setName(p.name);
-    setPath(p.path);
-    setError("");
-  }
 
   async function choose() {
     setError("");
@@ -50,9 +35,13 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
     if (!path.trim()) return setError("Path is required.");
     setBusy(true);
     try {
-      await saveProject({ id: editing?.id, name: name.trim(), path: path.trim() });
-      reset();
-      router.refresh();
+      const row = await saveProject({
+        id: project?.id,
+        name: name.trim(),
+        path: path.trim(),
+      });
+      if (project) router.refresh();
+      else router.push(`/projects/${row.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -60,18 +49,19 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
     }
   }
 
-  async function remove(p: Project) {
+  async function remove() {
+    if (!project) return;
     if (
       !(await confirm({
         title: "Delete project",
-        message: `Delete "${p.name}"? This can't be undone.`,
+        message: `Delete "${project.name}"? This can't be undone.`,
       }))
     )
       return;
     setError("");
-    const res = await deleteProjectAction(p.id);
+    const res = await deleteProjectAction(project.id);
     if (!res.ok) return setError(res.error);
-    if (editing?.id === p.id) reset();
+    router.push("/projects/new");
     router.refresh();
   }
 
@@ -80,14 +70,21 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
       {dialog}
       <div className="page-head">
         <div>
-          <h1>Projects</h1>
-          <p>Local directories an agent can work on. Paths are exposed to its model.</p>
+          <h1>{project ? project.name : "New project"}</h1>
+          <p>
+            Local directories an agent can work on. Paths are exposed to its
+            model.
+          </p>
         </div>
+        {project && (
+          <button className="btn small danger" onClick={remove} disabled={busy}>
+            Delete
+          </button>
+        )}
       </div>
 
       <div className="card">
         <div className="stack">
-          <h3 style={{ margin: 0 }}>{editing ? "Edit project" : "New project"}</h3>
           <div>
             <label>Name</label>
             <input
@@ -115,55 +112,11 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
           {error && <div className="error">{error}</div>}
           <div className="row">
             <button className="btn primary" onClick={save} disabled={busy}>
-              {editing ? "Save changes" : "Add project"}
+              {project ? "Save changes" : "Add project"}
             </button>
-            {editing && (
-              <button className="btn" onClick={reset} disabled={busy}>
-                Cancel
-              </button>
-            )}
           </div>
         </div>
       </div>
-
-      {projects.length === 0 ? (
-        <div className="empty">No projects yet.</div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Path</th>
-                <th style={{ width: 140 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <strong>{p.name}</strong>
-                  </td>
-                  <td className="mono">{p.path}</td>
-                  <td>
-                    <div className="row" style={{ gap: 8 }}>
-                      <button className="btn small" onClick={() => startEdit(p)}>
-                        Edit
-                      </button>
-                      <button
-                        className="btn small danger"
-                        onClick={() => remove(p)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </>
   );
 }

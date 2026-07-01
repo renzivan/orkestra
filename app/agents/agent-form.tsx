@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Agent, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
@@ -131,10 +130,7 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
       {dialog}
       <div className="page-head">
         <div>
-          <Link href="/tasks" className="muted">
-            ← Home
-          </Link>
-          <h1 style={{ marginTop: 8 }}>{agent ? agent.name : "New agent"}</h1>
+          <h1>{agent ? agent.name : "New agent"}</h1>
           <p>
             Base instruction + optional skills + projects, running on an
             adapter.

@@ -6,34 +6,20 @@ import type { Agent, Flow } from "@/lib/types";
 import { saveFlow, deleteFlowAction } from "../actions";
 import { useConfirm } from "../confirm-dialog";
 
-export function FlowsClient({
-  flows,
-  agents,
-}: {
-  flows: Flow[];
+interface Props {
+  flow: Flow | null;
   agents: Agent[];
-}) {
+}
+
+export function FlowForm({ flow, agents }: Props) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
-  const [editing, setEditing] = useState<Flow | null>(null);
-  const [name, setName] = useState("");
-  const [agentIds, setAgentIds] = useState<number[]>([]);
+  const [name, setName] = useState(flow?.name ?? "");
+  const [agentIds, setAgentIds] = useState<number[]>(
+    flow?.agents.map((a) => a.id) ?? [],
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  function reset() {
-    setEditing(null);
-    setName("");
-    setAgentIds([]);
-    setError("");
-  }
-
-  function startEdit(f: Flow) {
-    setEditing(f);
-    setName(f.name);
-    setAgentIds(f.agents.map((a) => a.id));
-    setError("");
-  }
 
   function agentName(id: number) {
     return agents.find((a) => a.id === id)?.name ?? `#${id}`;
@@ -51,9 +37,13 @@ export function FlowsClient({
     if (agentIds.length === 0) return setError("Add at least one agent.");
     setBusy(true);
     try {
-      await saveFlow({ id: editing?.id, name: name.trim(), agent_ids: agentIds });
-      reset();
-      router.refresh();
+      const row = await saveFlow({
+        id: flow?.id,
+        name: name.trim(),
+        agent_ids: agentIds,
+      });
+      if (flow) router.refresh();
+      else router.push(`/flows/${row.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -61,18 +51,19 @@ export function FlowsClient({
     }
   }
 
-  async function remove(f: Flow) {
+  async function remove() {
+    if (!flow) return;
     if (
       !(await confirm({
         title: "Delete flow",
-        message: `Delete "${f.name}"? This can't be undone.`,
+        message: `Delete "${flow.name}"? This can't be undone.`,
       }))
     )
       return;
     setError("");
-    const res = await deleteFlowAction(f.id);
+    const res = await deleteFlowAction(flow.id);
     if (!res.ok) return setError(res.error);
-    if (editing?.id === f.id) reset();
+    router.push("/flows/new");
     router.refresh();
   }
 
@@ -83,22 +74,27 @@ export function FlowsClient({
       {dialog}
       <div className="page-head">
         <div>
-          <h1>Flows</h1>
+          <h1>{flow ? flow.name : "New flow"}</h1>
           <p>An ordered pipeline of agents. Each agent&apos;s output feeds the next.</p>
         </div>
+        {flow && (
+          <button className="btn small danger" onClick={remove} disabled={busy}>
+            Delete
+          </button>
+        )}
       </div>
 
       {noAgents && (
         <div className="card">
           <div className="muted">
-            Create an <a href="/agents">agent</a> first — a flow is made of agents.
+            Create an <a href="/agents/new">agent</a> first — a flow is made of
+            agents.
           </div>
         </div>
       )}
 
       <div className="card">
         <div className="stack">
-          <h3 style={{ margin: 0 }}>{editing ? "Edit flow" : "New flow"}</h3>
           <div>
             <label>Name</label>
             <input
@@ -168,55 +164,16 @@ export function FlowsClient({
           </div>
           {error && <div className="error">{error}</div>}
           <div className="row">
-            <button className="btn primary" onClick={save} disabled={busy || noAgents}>
-              {editing ? "Save changes" : "Add flow"}
+            <button
+              className="btn primary"
+              onClick={save}
+              disabled={busy || noAgents}
+            >
+              {flow ? "Save changes" : "Add flow"}
             </button>
-            {editing && (
-              <button className="btn" onClick={reset} disabled={busy}>
-                Cancel
-              </button>
-            )}
           </div>
         </div>
       </div>
-
-      {flows.length === 0 ? (
-        <div className="empty">No flows yet.</div>
-      ) : (
-        <div className="card" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Pipeline</th>
-                <th style={{ width: 140 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {flows.map((f) => (
-                <tr key={f.id}>
-                  <td>
-                    <strong>{f.name}</strong>
-                  </td>
-                  <td className="muted">
-                    {f.agents.map((a) => a.name).join(" → ") || "—"}
-                  </td>
-                  <td>
-                    <div className="row" style={{ gap: 8 }}>
-                      <button className="btn small" onClick={() => startEdit(f)}>
-                        Edit
-                      </button>
-                      <button className="btn small danger" onClick={() => remove(f)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </>
   );
 }

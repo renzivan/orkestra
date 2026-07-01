@@ -1,10 +1,6 @@
-import { db } from "@/lib/db";
-import { listSkills } from "@/lib/repos/skills";
-import { SkillsClient } from "./skills-client";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// Skills live in the sidebar now; landing on /skills opens the new-skill form.
 export default function SkillsPage() {
-  const skills = listSkills(db());
-  return <SkillsClient skills={skills} />;
+  redirect("/skills/new");
 }
