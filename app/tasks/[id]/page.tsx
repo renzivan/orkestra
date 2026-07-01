@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { getTask } from "@/lib/repos/tasks";
+import { getTask, taskLabel } from "@/lib/repos/tasks";
 import { latestRunForTask, getRunWithSteps } from "@/lib/repos/runs";
+import { getSettings } from "@/lib/repos/settings";
 import { RunView } from "./run-view";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function TaskDetailPage({
 
   const latest = latestRunForTask(database, task.id);
   const run = latest ? getRunWithSteps(database, latest.id) : null;
+  const prefix = getSettings(database).task_prefix;
 
   return (
     <>
@@ -27,7 +29,9 @@ export default async function TaskDetailPage({
           <Link href="/tasks" className="muted">
             ← Tasks
           </Link>
-          <h1 style={{ marginTop: 8 }}>{task.title}</h1>
+          <h1 style={{ marginTop: 8 }}>
+            {taskLabel(prefix, task.id, task.title)}
+          </h1>
         </div>
         <span className={`badge ${task.status}`}>{task.status}</span>
       </div>

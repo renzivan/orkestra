@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Task, TargetType } from "@/lib/types";
+import { taskLabel } from "@/lib/repos/tasks";
 import { createTaskAction, runTaskAction } from "../actions";
 
 interface Named {
@@ -15,10 +16,12 @@ export function TasksClient({
   tasks,
   flows,
   agents,
+  prefix,
 }: {
   tasks: Task[];
   flows: Named[];
   agents: Named[];
+  prefix: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -163,7 +166,7 @@ export function TasksClient({
                 <tr key={t.id}>
                   <td>
                     <Link href={`/tasks/${t.id}`}>
-                      <strong>{t.title}</strong>
+                      <strong>{taskLabel(prefix, t.id, t.title)}</strong>
                     </Link>
                   </td>
                   <td className="muted">

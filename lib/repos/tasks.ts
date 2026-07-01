@@ -8,6 +8,12 @@ export interface TaskInput {
   target_id: number;
 }
 
+/** Display label for a task: "<prefix>-<id>: <title>", or just the title when
+ *  no prefix is set. */
+export function taskLabel(prefix: string, id: number, title: string): string {
+  return prefix ? `${prefix}-${id}: ${title}` : title;
+}
+
 export function createTask(db: Database, input: TaskInput): Task {
   const now = new Date().toISOString();
   return db

@@ -96,6 +96,8 @@ export interface Run {
 export interface Settings {
   retries: number;
   step_timeout_seconds: number;
+  /** Short key (≤4 chars) prepended to task titles as "<prefix>-<id>: <title>". */
+  task_prefix: string;
 }
 
 export interface Ref {

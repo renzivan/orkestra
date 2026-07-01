@@ -44,7 +44,7 @@ test("an existing v1 database migrates to the adapter schema", () => {
   // Simulate a pre-migration DB by forcing it back to v1 shape would be complex;
   // instead assert the migration runner brings a fresh DB to the latest version.
   const version = (db.query("PRAGMA user_version").get() as any).user_version;
-  expect(version).toBe(6);
+  expect(version).toBe(7);
 });
 
 test("v5 accepts the 'stopped' status on tasks, runs and run_steps", () => {

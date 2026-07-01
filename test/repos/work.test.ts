@@ -59,10 +59,19 @@ test("settings get/update", () => {
   expect(Settings.getSettings(db)).toEqual({
     retries: 1,
     step_timeout_seconds: 600,
+    task_prefix: "",
   });
   Settings.updateSettings(db, { retries: 3, step_timeout_seconds: 120 });
   expect(Settings.getSettings(db)).toEqual({
     retries: 3,
     step_timeout_seconds: 120,
+    task_prefix: "",
   });
+  Settings.updateSettings(db, { task_prefix: "ENG" });
+  expect(Settings.getSettings(db).task_prefix).toBe("ENG");
+});
+
+test("taskLabel formats with prefix, falls back to title", () => {
+  expect(Tasks.taskLabel("ENG", 1, "run tests")).toBe("ENG-1: run tests");
+  expect(Tasks.taskLabel("", 1, "run tests")).toBe("run tests");
 });

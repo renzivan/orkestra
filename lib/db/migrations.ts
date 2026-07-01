@@ -192,4 +192,9 @@ export const MIGRATIONS: string[][] = [
 
     `PRAGMA foreign_keys=ON`,
   ],
+
+  // v7 — a short task key prefix (e.g. "ENG") shown before each task, rendered
+  // as "<prefix>-<id>: <title>". Empty by default, so tasks show just their
+  // title until a prefix is set on the settings page.
+  [`ALTER TABLE settings ADD COLUMN task_prefix TEXT NOT NULL DEFAULT ''`],
 ];

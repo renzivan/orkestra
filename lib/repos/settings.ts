@@ -3,7 +3,9 @@ import type { Settings } from "../types";
 
 export function getSettings(db: Database): Settings {
   const row = db
-    .query("SELECT retries, step_timeout_seconds FROM settings WHERE id = 1")
+    .query(
+      "SELECT retries, step_timeout_seconds, task_prefix FROM settings WHERE id = 1",
+    )
     .get() as Settings;
   return row;
 }
@@ -16,7 +18,12 @@ export function updateSettings(
   const next: Settings = { ...current, ...patch };
   db.query(
     `UPDATE settings SET retries = $retries,
-       step_timeout_seconds = $timeout WHERE id = 1`,
-  ).run({ $retries: next.retries, $timeout: next.step_timeout_seconds });
+       step_timeout_seconds = $timeout,
+       task_prefix = $prefix WHERE id = 1`,
+  ).run({
+    $retries: next.retries,
+    $timeout: next.step_timeout_seconds,
+    $prefix: next.task_prefix,
+  });
   return next;
 }

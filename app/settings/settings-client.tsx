@@ -9,6 +9,7 @@ export function SettingsClient({ settings }: { settings: Settings }) {
   const router = useRouter();
   const [retries, setRetries] = useState(String(settings.retries));
   const [timeout, setTimeout] = useState(String(settings.step_timeout_seconds));
+  const [prefix, setPrefix] = useState(settings.task_prefix);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -16,14 +17,16 @@ export function SettingsClient({ settings }: { settings: Settings }) {
   async function save() {
     const r = Number(retries);
     const t = Number(timeout);
+    const p = prefix.trim();
     if (!Number.isInteger(r) || r < 0)
       return setError("Retries must be a non-negative integer.");
     if (!Number.isInteger(t) || t <= 0)
       return setError("Timeout must be a positive integer.");
+    if (p.length > 4) return setError("Task prefix must be 4 characters or fewer.");
     setError("");
     setBusy(true);
     try {
-      await saveSettings({ retries: r, step_timeout_seconds: t });
+      await saveSettings({ retries: r, step_timeout_seconds: t, task_prefix: p });
       setSaved(true);
       router.refresh();
     } finally {
@@ -71,6 +74,25 @@ export function SettingsClient({ settings }: { settings: Settings }) {
             />
             <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
               A step running longer than this is killed and counts as a failure.
+            </div>
+          </div>
+          <div>
+            <label>Task prefix</label>
+            <input
+              type="text"
+              value={prefix}
+              maxLength={4}
+              placeholder="ENG"
+              style={{ maxWidth: 160 }}
+              onChange={(e) => {
+                setPrefix(e.target.value);
+                setSaved(false);
+              }}
+            />
+            <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              Short key (≤4 chars) shown before each task, e.g.{" "}
+              <code>{(prefix.trim() || "ENG") + "-1"}: run tests</code>. Leave
+              blank to show just the title.
             </div>
           </div>
           {error && <div className="error">{error}</div>}
