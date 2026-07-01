@@ -2,6 +2,7 @@
 
 Do not create a new branch for each feature.
 Commit directly to main and push.
+Ask me before committing and pushing to main.
 
 ## graphify
 
