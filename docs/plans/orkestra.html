@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orkestra — Implementation Plan</title>
+    <style>
+      :root {
+        --bg: #faf9f5; --fg: #141413; --muted: #6b6862; --accent: #d97757;
+        --line: #e8e5dd; --success: #4a7c59; --warning: #c28b2d; --danger: #b54848; --info: #4a6b8a;
+        --s-1:4px; --s-2:8px; --s-3:16px; --s-4:24px; --s-5:32px; --s-6:64px;
+        --t-h1:32px; --t-h2:24px; --t-h3:18px; --t-body:15px; --t-caption:12px;
+        --r-sm:4px; --r-md:8px; --r-lg:16px;
+        --shadow-1:0 1px 2px rgba(20,20,19,.06); --shadow-2:0 4px 12px rgba(20,20,19,.08);
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      }
+      * { box-sizing: border-box; }
+      body { margin:0; background:var(--bg); color:var(--fg);
+        font:var(--t-body)/1.55 -apple-system, ui-sans-serif, system-ui, "Inter", sans-serif;
+        font-feature-settings:"ss01","cv11"; }
+      header.top { padding:var(--s-6) var(--s-5) var(--s-5); border-bottom:1px solid var(--line);
+        max-width:1100px; margin:0 auto; }
+      header.top h1 { font-size:var(--t-h1); margin:0 0 var(--s-2); letter-spacing:-.02em; }
+      header.top p { color:var(--muted); margin:var(--s-1) 0; max-width:70ch; }
+      main { max-width:1100px; margin:0 auto; padding:var(--s-5); }
+      h2 { font-size:var(--t-h2); margin:var(--s-6) 0 var(--s-3); letter-spacing:-.01em;
+        padding-bottom:var(--s-2); border-bottom:1px solid var(--line); }
+      h3 { font-size:var(--t-h3); margin:var(--s-4) 0 var(--s-2); }
+      p, li { max-width:80ch; }
+      code { font-family:var(--mono); font-size:.86em; background:#f1efe8; padding:1px 5px; border-radius:var(--r-sm); }
+      pre { background:#f6f4ee; border:1px solid var(--line); border-radius:var(--r-md);
+        padding:var(--s-3); overflow-x:auto; font-family:var(--mono); font-size:12.5px; line-height:1.5; }
+      pre code { background:none; padding:0; font-size:inherit; }
+      .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-3); }
+      .grid2 { display:grid; grid-template-columns:repeat(2,1fr); gap:var(--s-3); }
+      @media (max-width:820px){ .grid3,.grid2{grid-template-columns:1fr;} }
+      .card { background:#fff; border:1px solid var(--line); border-radius:var(--r-lg);
+        padding:var(--s-3) var(--s-4); box-shadow:var(--shadow-1); }
+      .pill { display:inline-block; font-size:var(--t-caption); font-weight:600; padding:2px 9px;
+        border-radius:999px; border:1px solid var(--line); color:var(--muted); background:#fff; margin:2px 4px 2px 0; }
+      .pill.ok{ color:var(--success); border-color:#c9dccf; background:#f2f7f3; }
+      .pill.warn{ color:var(--warning); border-color:#ecdcae; background:#faf3e3; }
+      .pill.acc{ color:var(--accent); border-color:#eccabd; background:#fbeee8; }
+      .panel { border-radius:var(--r-lg); padding:var(--s-4); margin:var(--s-4) 0; }
+      .panel.decisions { background:#f2f7f3; border:1px solid #c9dccf; }
+      .panel.open { background:#faf3e3; border:1px solid #ecdcae; }
+      .panel h3 { margin-top:0; }
+      table { border-collapse:collapse; width:100%; font-size:13.5px; }
+      th,td { text-align:left; padding:var(--s-2) var(--s-3); border-bottom:1px solid var(--line); vertical-align:top; }
+      th { color:var(--muted); font-weight:600; font-size:var(--t-caption); text-transform:uppercase; letter-spacing:.04em; }
+      .task { background:#fff; border:1px solid var(--line); border-left:3px solid var(--accent);
+        border-radius:var(--r-md); padding:var(--s-3) var(--s-4); margin:var(--s-3) 0; box-shadow:var(--shadow-1); }
+      .task h4 { margin:0 0 var(--s-2); font-size:15px; }
+      .task .meta { font-size:12.5px; color:var(--muted); margin:var(--s-1) 0 var(--s-2); }
+      .task .meta b { color:var(--fg); font-weight:600; }
+      .step { margin:var(--s-1) 0; padding-left:var(--s-3); }
+      .phase-h { display:flex; align-items:baseline; gap:var(--s-3); }
+      .phase-h .tag { font-size:var(--t-caption); color:#fff; background:var(--fg); padding:2px 8px; border-radius:var(--r-sm); }
+      ul.tight{ margin:var(--s-1) 0; padding-left:var(--s-4); }
+      .muted{ color:var(--muted); }
+      svg { max-width:100%; height:auto; }
+      .toc a{ color:var(--info); text-decoration:none; } .toc a:hover{ text-decoration:underline; }
+      .kbd{ font-family:var(--mono); font-size:11px; background:#eee; border:1px solid #ddd; border-radius:3px; padding:0 4px; }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <h1>Orkestra — Implementation Plan</h1>
+      <p><b>Goal:</b> A local web app where a user defines reusable skills, projects, models, and agents, composes agents into linear flows, then runs a task through a flow (or single agent) by spawning local CLIs and chaining their output.</p>
+      <p><b>Architecture:</b> Next.js (App Router) on Bun, single process. SQLite (<code>bun:sqlite</code>) at <code>~/.orkestra/orkestra.db</code> holds all definitions and run history. A template engine turns each agent's model into an argv, spawns the CLI (input via stdin, result via stdout), and a flow runner chains steps, retries on failure, and streams live output to the browser over SSE.</p>
+      <p class="muted">For agentic workers: this plan is implemented task-by-task with TDD. Each task ends in an independently testable, committable deliverable. Steps use <code>- [ ]</code> tracking.</p>
+    </header>
+
+    <main>
+      <!-- ============ DECISIONS ============ -->
+      <section>
+        <div class="panel decisions">
+          <h3>✓ Resolved decisions (from grilling)</h3>
+          <div class="grid2">
+            <ul class="tight">
+              <li><b>Purpose:</b> multi-agent coordination; runs agents by spawning local CLIs.</li>
+              <li><b>Topology:</b> linear pipeline (Flow = ordered agents; output → next input).</li>
+              <li><b>Agent =</b> base instruction (required) + 0..N skills + 0..N projects + 1 model.</li>
+              <li><b>Skill =</b> name + markdown body only. Concatenated after base instruction.</li>
+              <li><b>Project =</b> name + local path. All paths exposed to the CLI; no single cwd.</li>
+              <li><b>Model =</b> user-registered command template (shell-out, not API). See <a href="../adr/0001-shell-out-to-cli-via-command-templates.md">ADR-0001</a>.</li>
+            </ul>
+            <ul class="tight">
+              <li><b>Template IO:</b> input via <b>stdin</b>, result from <b>stdout</b>, stderr → logs.</li>
+              <li><b>Placeholders:</b> <code>{system}</code>, <code>{input}</code>, <code>{projects}</code>, <code>{projects:--flag}</code>.</li>
+              <li><b>Task =</b> title + body; targets a flow OR a single agent; holds status/results.</li>
+              <li><b>Failure:</b> retry <code>N</code> times (Settings) then stop + mark failed; keep partial.</li>
+              <li><b>Concurrency:</b> multiple tasks run at once; steps within a flow are sequential.</li>
+              <li><b>Persistence:</b> per-step (input/output/exit/timing) + final result.</li>
+              <li><b>Delete:</b> blocked while referenced (shows what uses it).</li>
+              <li><b>Stack:</b> Next.js App Router · Bun (pm + runtime) · <code>bun:sqlite</code> · SSE streaming.</li>
+              <li><b>MVP pages:</b> Skills · Projects · Models · Agents · Flows · Tasks · Settings.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel open">
+          <h3>Open Questions</h3>
+          <p style="margin:0"><b>None blocking.</b> Two tunables were defaulted rather than left open — both live in Settings and are trivially changeable:</p>
+          <ul class="tight" style="margin-top:var(--s-2)">
+            <li><b>Retries default = 1</b> (retry a failed step once, then stop + fail).</li>
+            <li><b>Per-step timeout default = 600s</b> (kill a hung CLI; a step exceeding it counts as a failure and is retried per the retry rule).</li>
+          </ul>
+          <p class="muted" style="margin-bottom:0">Flag now if either default is wrong — otherwise implementation proceeds with these.</p>
+        </div>
+      </section>
+
+      <!-- ============ CONSTRAINTS ============ -->
+      <section>
+        <h2>Global Constraints</h2>
+        <ul class="tight">
+          <li>Runtime: <b>Bun</b> for install and run (<code>bun install</code>, <code>bun --bun run dev</code>). Language: <b>TypeScript</b>, strict.</li>
+          <li>DB: <b>bun:sqlite</b> only. DB file at <code>~/.orkestra/orkestra.db</code> (dir auto-created). Tests use an in-memory / temp-file DB.</li>
+          <li>No shell interpretation when spawning models — build an <b>argv array</b> and use <code>Bun.spawn(argv, …)</code>. Never pass user text through <code>sh -c</code>.</li>
+          <li>Tests: <b>bun test</b>. The engine is tested against a <b>fake CLI fixture</b> (a shell script that echoes), never a real LLM.</li>
+          <li>Every task is TDD: failing test → run (see it fail) → minimal impl → run (pass) → commit. Commit messages plain, no AI co-author.</li>
+          <li>Each entity: names are unique (case-insensitive) within their type.</li>
+        </ul>
+      </section>
+
+      <!-- ============ ARCHITECTURE DIAGRAM ============ -->
+      <section>
+        <h2>How a run works</h2>
+        <div class="card">
+          <svg viewBox="0 0 900 260" role="img" aria-label="Flow run diagram">
+            <defs>
+              <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 Z" fill="#6b6862"/>
+              </marker>
+            </defs>
+            <rect x="20" y="20" width="150" height="60" rx="10" fill="#fbeee8" stroke="#eccabd"/>
+            <text x="95" y="45" text-anchor="middle" font-size="13" font-weight="600" fill="#141413">Task</text>
+            <text x="95" y="63" text-anchor="middle" font-size="11" fill="#6b6862">title + body → input</text>
+
+            <line x1="170" y1="50" x2="215" y2="50" stroke="#6b6862" marker-end="url(#arr)"/>
+
+            <g>
+              <rect x="220" y="20" width="180" height="120" rx="10" fill="#fff" stroke="#e8e5dd"/>
+              <text x="310" y="42" text-anchor="middle" font-size="13" font-weight="600">Agent A</text>
+              <text x="310" y="62" text-anchor="middle" font-size="10.5" fill="#6b6862">system = base + skills</text>
+              <text x="310" y="78" text-anchor="middle" font-size="10.5" fill="#6b6862">stdin = input</text>
+              <text x="310" y="94" text-anchor="middle" font-size="10.5" fill="#6b6862">model → spawn CLI</text>
+              <text x="310" y="110" text-anchor="middle" font-size="10.5" fill="#6b6862">projects → paths</text>
+              <text x="310" y="128" text-anchor="middle" font-size="10.5" fill="#4a7c59">stdout = outA</text>
+            </g>
+
+            <line x1="400" y1="80" x2="445" y2="80" stroke="#6b6862" marker-end="url(#arr)"/>
+            <text x="422" y="72" text-anchor="middle" font-size="10" fill="#6b6862">outA</text>
+
+            <g>
+              <rect x="450" y="20" width="180" height="120" rx="10" fill="#fff" stroke="#e8e5dd"/>
+              <text x="540" y="42" text-anchor="middle" font-size="13" font-weight="600">Agent B</text>
+              <text x="540" y="62" text-anchor="middle" font-size="10.5" fill="#6b6862">system = base + skills</text>
+              <text x="540" y="78" text-anchor="middle" font-size="10.5" fill="#6b6862">stdin = outA</text>
+              <text x="540" y="94" text-anchor="middle" font-size="10.5" fill="#6b6862">model → spawn CLI</text>
+              <text x="540" y="128" text-anchor="middle" font-size="10.5" fill="#4a7c59">stdout = outB</text>
+            </g>
+
+            <line x1="630" y1="80" x2="675" y2="80" stroke="#6b6862" marker-end="url(#arr)"/>
+            <rect x="680" y="50" width="150" height="60" rx="10" fill="#f2f7f3" stroke="#c9dccf"/>
+            <text x="755" y="75" text-anchor="middle" font-size="13" font-weight="600">final result</text>
+            <text x="755" y="93" text-anchor="middle" font-size="10.5" fill="#6b6862">task = succeeded</text>
+
+            <text x="20" y="180" font-size="11" fill="#6b6862">Each step persisted to run_steps (input, output, exit, timing). Live stdout streamed to the browser via SSE.</text>
+            <text x="20" y="200" font-size="11" fill="#6b6862">On non-zero exit or timeout: retry N times (Settings), else stop, mark run + task failed, keep partial output.</text>
+            <text x="20" y="220" font-size="11" fill="#6b6862">Single-agent task = a one-step flow. Skills optional; agent with 0 skills = system is just its base instruction.</text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- ============ DATA MODEL ============ -->
+      <section>
+        <h2>Data model (SQLite)</h2>
+        <pre><code>-- definitions
+skills(id, name UNIQUE, body, created_at, updated_at)
+projects(id, name UNIQUE, path, created_at, updated_at)
+models(id, name UNIQUE, command, created_at, updated_at)      -- command = template string
+agents(id, name UNIQUE, base_instruction, model_id → models, created_at, updated_at)
+agent_skills(agent_id → agents, skill_id → skills, position)  -- ordered; PK(agent_id, skill_id)
+agent_projects(agent_id → agents, project_id → projects)      -- PK(agent_id, project_id)
+flows(id, name UNIQUE, created_at, updated_at)
+flow_steps(id, flow_id → flows, agent_id → agents, position)  -- ordered
+
+-- work + history
+tasks(id, title, body, target_type ['flow'|'agent'], target_id, status
+      ['pending'|'running'|'succeeded'|'failed'], created_at, updated_at)
+runs(id, task_id → tasks, status, final_output, error, started_at, finished_at)
+run_steps(id, run_id → runs, position, agent_id, agent_name, input, output,
+          exit_code, error, status, started_at, finished_at)
+
+-- config (singleton row id=1)
+settings(id=1, retries DEFAULT 1, step_timeout_seconds DEFAULT 600)</code></pre>
+        <p class="muted">Deletes on skills/projects/models/agents/flows are <b>blocked</b> when referenced by the relation/step/agent/task tables (checked in repo layer, surfaced to the UI).</p>
+      </section>
+
+      <!-- ============ FILE STRUCTURE ============ -->
+      <section>
+        <h2>File structure</h2>
+        <pre><code>orkestra/
+  package.json  tsconfig.json  next.config.ts
+  lib/
+    db/
+      index.ts            # open bun:sqlite, run migrations
+      migrations.ts       # ordered DDL statements
+    repos/
+      skills.ts  projects.ts  models.ts  agents.ts  flows.ts
+      tasks.ts   runs.ts      settings.ts
+    refs.ts               # reference-guard: what references X?
+    engine/
+      template.ts         # parse + substitute template → argv
+      exec.ts             # spawn one CLI step (stdin/stdout, timeout, stream)
+      runner.ts           # resolve target, chain steps, retry, persist
+      bus.ts              # in-memory pub/sub for live run output (SSE)
+    types.ts              # shared TS types
+  app/
+    layout.tsx  page.tsx  globals.css  nav.tsx
+    skills/page.tsx    projects/page.tsx   models/page.tsx
+    agents/page.tsx    flows/page.tsx      settings/page.tsx
+    tasks/page.tsx     tasks/[id]/page.tsx
+    actions.ts          # server actions (CRUD + create/run task)
+    api/runs/[id]/stream/route.ts   # SSE live output
+  test/
+    fixtures/echo-model.sh          # fake CLI for engine tests
+    *.test.ts</code></pre>
+      </section>
+
+      <!-- ============ TASKS ============ -->
+      <h2>Tasks</h2>
+
+      <!-- PHASE A -->
+      <div class="phase-h"><span class="tag">Phase A</span><h3 style="margin:var(--s-4) 0 0">Scaffold &amp; data layer</h3></div>
+
+      <div class="task">
+        <h4>T1 · Scaffold Next.js on Bun</h4>
+        <div class="meta"><b>Create:</b> project via <code>create-next-app</code> · <b>Test:</b> <code>test/smoke.test.ts</code></div>
+        <div class="step">- [ ] <b>Step 1</b> — Scaffold: <code>bunx create-next-app@latest orkestra --ts --app --no-tailwind --no-src-dir --no-eslint --yes</code> into this dir (or merge if run inside). Then <code>bun install</code>.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Add scripts to <code>package.json</code>: <code>"dev":"next dev","test":"bun test"</code>. Add <code>"type":"module"</code> if missing.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Write failing smoke test:
+          <pre><code>// test/smoke.test.ts
+import { expect, test } from "bun:test";
+test("bun test runs", () => { expect(1 + 1).toBe(2); });</code></pre></div>
+        <div class="step">- [ ] <b>Step 4</b> — Run <code>bun test</code> → PASS. Run <code>bun --bun run dev</code>, confirm <code>localhost:3000</code> loads, stop it.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>chore: scaffold next.js app on bun</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T2 · DB open + migrations</h4>
+        <div class="meta"><b>Create:</b> <code>lib/db/index.ts</code>, <code>lib/db/migrations.ts</code> · <b>Test:</b> <code>test/db.test.ts</code></div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test: opening a fresh DB creates every table and the settings singleton.
+          <pre><code>// test/db.test.ts
+import { expect, test } from "bun:test";
+import { openDb } from "../lib/db";
+test("migrations create tables + settings row", () => {
+  const db = openDb(":memory:");
+  const names = db.query(
+    "SELECT name FROM sqlite_master WHERE type='table'"
+  ).all().map((r:any)=>r.name);
+  for (const t of ["skills","projects","models","agents","agent_skills",
+    "agent_projects","flows","flow_steps","tasks","runs","run_steps","settings"])
+    expect(names).toContain(t);
+  const s:any = db.query("SELECT * FROM settings WHERE id=1").get();
+  expect(s.retries).toBe(1);
+  expect(s.step_timeout_seconds).toBe(600);
+});</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL (no <code>lib/db</code>).</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement. <code>migrations.ts</code> exports an ordered <code>string[]</code> of DDL (the schema above, with <code>INSERT OR IGNORE INTO settings(id,retries,step_timeout_seconds) VALUES(1,1,600)</code> last). <code>index.ts</code>:
+          <pre><code>// lib/db/index.ts
+import { Database } from "bun:sqlite";
+import { homedir } from "os";
+import { mkdirSync } from "fs";
+import { join } from "path";
+import { MIGRATIONS } from "./migrations";
+export function openDb(path?: string) {
+  let file = path;
+  if (!file) { const dir = join(homedir(), ".orkestra");
+    mkdirSync(dir, { recursive: true }); file = join(dir, "orkestra.db"); }
+  const db = new Database(file);
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  for (const stmt of MIGRATIONS) db.exec(stmt);
+  return db;
+}
+let _db: import("bun:sqlite").Database | null = null;
+export function db() { return (_db ??= openDb()); }</code></pre></div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: sqlite schema + migrations</code>.</div>
+      </div>
+
+      <!-- PHASE B -->
+      <div class="phase-h"><span class="tag">Phase B</span><h3 style="margin:var(--s-4) 0 0">Repositories</h3></div>
+
+      <div class="task">
+        <h4>T3 · Skills repo (the CRUD template)</h4>
+        <div class="meta"><b>Create:</b> <code>lib/repos/skills.ts</code>, <code>lib/types.ts</code> · <b>Test:</b> <code>test/repos/skills.test.ts</code></div>
+        <div class="meta"><b>Produces (later tasks rely on this exact shape):</b> <code>createSkill(db,{name,body}) → Skill</code>, <code>listSkills(db) → Skill[]</code>, <code>getSkill(db,id)</code>, <code>updateSkill(db,id,{name,body})</code>, <code>deleteSkill(db,id)</code>. <code>Skill = {id:number,name:string,body:string,created_at,updated_at}</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test:
+          <pre><code>// test/repos/skills.test.ts
+import { expect, test } from "bun:test";
+import { openDb } from "../../lib/db";
+import * as R from "../../lib/repos/skills";
+test("create/list/get/update/delete + unique name", () => {
+  const db = openDb(":memory:");
+  const s = R.createSkill(db, { name: "write-tests", body: "TDD." });
+  expect(s.id).toBeGreaterThan(0);
+  expect(R.listSkills(db).length).toBe(1);
+  R.updateSkill(db, s.id, { name: "write-tests", body: "Test first." });
+  expect(R.getSkill(db, s.id)!.body).toBe("Test first.");
+  expect(() => R.createSkill(db, { name: "WRITE-TESTS", body: "x" })).toThrow();
+  R.deleteSkill(db, s.id);
+  expect(R.listSkills(db).length).toBe(0);
+});</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement with prepared statements; enforce case-insensitive unique name via <code>name COLLATE NOCASE UNIQUE</code> in schema (adjust migration if needed) or a pre-check. Timestamps via <code>new Date().toISOString()</code>.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: skills repository</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T4 · Projects &amp; Models repos</h4>
+        <div class="meta"><b>Create:</b> <code>lib/repos/projects.ts</code>, <code>lib/repos/models.ts</code> · <b>Test:</b> matching <code>test/repos/*.test.ts</code></div>
+        <div class="meta">Same CRUD shape as T3. <b>Project</b> fields: <code>{id,name,path,created_at,updated_at}</code>. <b>Model</b> fields: <code>{id,name,command,created_at,updated_at}</code> (<code>command</code> = template string).</div>
+        <div class="step">- [ ] <b>Step 1</b> — For each repo, write the analogous CRUD + unique-name test (copy T3's test, swap the extra field: <code>path</code> for projects, <code>command</code> for models).</div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement both, mirroring skills.ts.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: projects and models repositories</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T5 · Agents repo (with ordered skills + projects)</h4>
+        <div class="meta"><b>Create:</b> <code>lib/repos/agents.ts</code> · <b>Test:</b> <code>test/repos/agents.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>createAgent(db,{name,base_instruction,model_id,skill_ids:number[],project_ids:number[]})</code>, <code>getAgent(db,id) → Agent</code> where <code>Agent = {id,name,base_instruction,model_id, skills:Skill[] (ordered), projects:Project[]}</code>, plus <code>listAgents</code>, <code>updateAgent</code>, <code>deleteAgent</code>. <code>skill_ids</code> order is preserved via <code>agent_skills.position</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test: create an agent with 2 skills (assert order) + 1 project + a model; get returns nested arrays; update replaces the skill set; agent with empty <code>skill_ids</code> and empty <code>project_ids</code> is valid.
+          <pre><code>const a = R.createAgent(db, { name:"planner", base_instruction:"You plan.",
+  model_id: m.id, skill_ids:[s2.id, s1.id], project_ids:[p.id] });
+const got = R.getAgent(db, a.id)!;
+expect(got.skills.map(s=>s.id)).toEqual([s2.id, s1.id]);   // order preserved
+expect(got.projects.length).toBe(1);
+const b = R.createAgent(db, { name:"bare", base_instruction:"hi",
+  model_id: m.id, skill_ids:[], project_ids:[] });
+expect(R.getAgent(db,b.id)!.skills.length).toBe(0);</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement inside a transaction: insert agent, then insert <code>agent_skills</code> with <code>position = index</code>, then <code>agent_projects</code>. <code>getAgent</code> joins skills ordered by position and projects. <code>updateAgent</code> deletes+reinserts relation rows.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: agents repository with skills and projects</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T6 · Flows repo (with ordered steps) + reference guard</h4>
+        <div class="meta"><b>Create:</b> <code>lib/repos/flows.ts</code>, <code>lib/refs.ts</code> · <b>Test:</b> <code>test/repos/flows.test.ts</code>, <code>test/refs.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>createFlow(db,{name,agent_ids:number[]})</code>, <code>getFlow(db,id) → {id,name,agents:Agent[]}</code> (ordered), <code>list/update/deleteFlow</code>. <code>refs.ts</code>: <code>referencesTo(db,kind,id) → {kind:string,name:string}[]</code> listing what uses an entity.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing tests: (a) flow preserves agent order; (b) <code>referencesTo(db,'skill',id)</code> returns the agents using it; <code>'agent'</code> returns flows/tasks using it; <code>'model'</code> returns agents; (c) <code>deleteSkill</code>/<code>deleteAgent</code> etc. throw when <code>referencesTo</code> is non-empty.
+          <pre><code>expect(() => Skills.deleteSkill(db, s.id)).toThrow(/referenced/);
+expect(refs.referencesTo(db,"skill",s.id)[0].kind).toBe("agent");</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement flows repo (mirror agents' ordered-relation pattern). Implement <code>refs.ts</code> with one query per relationship. Wire the guard into every <code>delete*</code> (throw <code>Error("… is referenced by …")</code> if non-empty). Update T3/T4/T5 deletes to call the guard.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS (re-run T3–T5 suites too).</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: flows repository and delete reference guard</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T7 · Tasks, Runs, Settings repos</h4>
+        <div class="meta"><b>Create:</b> <code>lib/repos/tasks.ts</code>, <code>lib/repos/runs.ts</code>, <code>lib/repos/settings.ts</code> · <b>Test:</b> matching tests</div>
+        <div class="meta"><b>Produces:</b> tasks: <code>createTask({title,body,target_type,target_id})</code>, <code>setTaskStatus(id,status)</code>, <code>listTasks</code>, <code>getTask</code>. runs: <code>startRun(task_id)→Run</code>, <code>addRunStep(run_id,{position,agent_id,agent_name,input})→stepId</code>, <code>finishRunStep(stepId,{output,exit_code,error,status})</code>, <code>finishRun(id,{status,final_output,error})</code>, <code>getRunWithSteps(id)</code>, <code>latestRunForTask(task_id)</code>. settings: <code>getSettings()→{retries,step_timeout_seconds}</code>, <code>updateSettings(patch)</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing tests for each: task status transitions; run + steps round-trip; settings get/update.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: tasks, runs, settings repositories</code>.</div>
+      </div>
+
+      <!-- PHASE C -->
+      <div class="phase-h"><span class="tag">Phase C</span><h3 style="margin:var(--s-4) 0 0">Engine (the core — heaviest TDD)</h3></div>
+
+      <div class="task">
+        <h4>T8 · Template engine: parse + substitute → argv</h4>
+        <div class="meta"><b>Create:</b> <code>lib/engine/template.ts</code> · <b>Test:</b> <code>test/engine/template.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>buildArgv(command:string, ctx:{system:string,input:string,projects:string[]}) → string[]</code>. Rules: tokenize on whitespace honoring <code>'…'</code>/<code>"…"</code>; each token substituted independently, <b>no shell</b>. <code>{system}</code>→one token (the system string). <code>{input}</code>→one token. <code>{projects}</code>→one token per path. <code>{projects:--flag}</code>→ per path emit two tokens <code>--flag</code>, <code>&lt;path&gt;</code>. Bare text passes through. A <code>{system}</code> etc. embedded in a larger token (e.g. <code>x={system}</code>) does string replacement within that single token.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test covering every rule:
+          <pre><code>import { buildArgv } from "../../lib/engine/template";
+const ctx = { system:"be nice", input:"do X", projects:["/a b","/c"] };
+expect(buildArgv("claude -p --append-system-prompt {system}", ctx))
+  .toEqual(["claude","-p","--append-system-prompt","be nice"]);
+expect(buildArgv("tool {projects}", ctx)).toEqual(["tool","/a b","/c"]);
+expect(buildArgv("tool {projects:--add-dir}", ctx))
+  .toEqual(["tool","--add-dir","/a b","--add-dir","/c"]);
+expect(buildArgv("tool {input}", ctx)).toEqual(["tool","do X"]);
+expect(buildArgv("tool 'a b' c", ctx)).toEqual(["tool","a b","c"]);
+expect(buildArgv("tool x={system}", ctx)).toEqual(["tool","x=be nice"]);</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement a small tokenizer (state machine over chars, quote-aware) → tokens; then a per-token expander: if a token is exactly <code>{projects}</code> or <code>{projects:X}</code> expand to multiple; else replace <code>{system}</code>/<code>{input}</code> substrings. Return the flat argv.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: command template to argv engine</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T9 · Step executor: spawn one CLI</h4>
+        <div class="meta"><b>Create:</b> <code>lib/engine/exec.ts</code>, <code>lib/engine/bus.ts</code>, <code>test/fixtures/echo-model.sh</code> · <b>Test:</b> <code>test/engine/exec.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>runStep({argv,input,timeoutMs,onChunk?}) → Promise&lt;{stdout,stderr,exitCode,timedOut}&gt;</code>. Pipes <code>input</code> to stdin, streams stdout chunks to <code>onChunk</code>, kills after <code>timeoutMs</code> (sets <code>timedOut</code>, exitCode≠0). <code>bus.ts</code>: tiny pub/sub — <code>publish(runId,event)</code>, <code>subscribe(runId,fn)→unsub</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Fixture <code>echo-model.sh</code> (chmod +x): reads stdin, prints a deterministic transform.
+          <pre><code>#!/usr/bin/env bash
+# prints: OUT[<args>]:<stdin>
+input="$(cat)"; echo "OUT[$*]:$input"</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Failing test: run <code>["bash","test/fixtures/echo-model.sh","--flag"]</code> with input "hi" → stdout contains <code>OUT[--flag]:hi</code>, exitCode 0; a sleeping command with <code>timeoutMs:50</code> → <code>timedOut:true</code>, exitCode≠0.
+          <pre><code>const r = await runStep({ argv:["bash","test/fixtures/echo-model.sh","--flag"],
+  input:"hi", timeoutMs:5000 });
+expect(r.exitCode).toBe(0);
+expect(r.stdout.trim()).toBe("OUT[--flag]:hi");
+const t = await runStep({ argv:["sleep","2"], input:"", timeoutMs:50 });
+expect(t.timedOut).toBe(true);</code></pre></div>
+        <div class="step">- [ ] <b>Step 3</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Implement with <code>Bun.spawn(argv,{stdin:Buffer.from(input),stdout:"pipe",stderr:"pipe"})</code>; read stdout stream chunk-by-chunk calling <code>onChunk</code> and accumulating; race a timer that calls <code>proc.kill()</code> and marks <code>timedOut</code>; await <code>proc.exited</code>.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Run → PASS. Commit: <code>feat: cli step executor with streaming and timeout</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T10 · Flow runner: chain, retry, persist, stream</h4>
+        <div class="meta"><b>Create:</b> <code>lib/engine/runner.ts</code> · <b>Test:</b> <code>test/engine/runner.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>runTask(db, taskId) → Promise&lt;Run&gt;</code>. Resolves target (flow→ordered agents; agent→[agent]); for each agent builds <code>system = base_instruction + "\n\n" + skills.map(body).join("\n\n")</code> and <code>argv = buildArgv(model.command, {system, input, projects:paths})</code>; calls <code>runStep</code> with <code>settings.step_timeout_seconds*1000</code>; on failure retries up to <code>settings.retries</code>; publishes step + chunk events to <code>bus</code>; persists via runs repo. Success → next input = stdout; final output = last. Any step exhausting retries → run+task <b>failed</b>, stop, keep partial.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing tests, all using the echo fixture as the model (<code>command = "bash test/fixtures/echo-model.sh"</code>):
+          <ul class="tight">
+            <li>2-agent flow: input threads through; final output derives from step-2 seeing step-1 output; <code>run_steps</code> has 2 rows in order; task = <code>succeeded</code>.</li>
+            <li>single-agent task: 1 step; succeeds.</li>
+            <li>failure: a model whose command is <code>bash -c 'exit 1'</code>; with <code>retries=1</code> the step runs twice then run+task = <code>failed</code>, later steps absent, partial kept.</li>
+          </ul>
+          <pre><code>const run = await runTask(db, task.id);
+expect(run.status).toBe("succeeded");
+const steps = Runs.getRunWithSteps(db, run.id).steps;
+expect(steps.length).toBe(2);
+expect(steps[1].input).toBe(steps[0].output);   // chaining</code></pre></div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement per the interface above. Keep it pure-ish: takes <code>db</code>, reads settings, uses <code>exec.runStep</code> + repos + <code>bus</code>. Wrap top-level in try/catch to always <code>finishRun</code> and <code>setTaskStatus</code>.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS.</div>
+        <div class="step">- [ ] <b>Step 5</b> — Commit: <code>feat: flow runner with chaining, retries, persistence</code>.</div>
+      </div>
+
+      <!-- PHASE D -->
+      <div class="phase-h"><span class="tag">Phase D</span><h3 style="margin:var(--s-4) 0 0">Server actions &amp; streaming</h3></div>
+
+      <div class="task">
+        <h4>T11 · Server actions (CRUD + create/run task)</h4>
+        <div class="meta"><b>Create:</b> <code>app/actions.ts</code> · <b>Test:</b> <code>test/actions.test.ts</code> (call the exported functions directly against a temp DB)</div>
+        <div class="meta"><b>Produces:</b> <code>"use server"</code> functions wrapping repos: <code>save/deleteSkill</code>, …, <code>saveAgent</code>, <code>saveFlow</code>, <code>saveSettings</code>, <code>createTask</code>, and <code>runTaskAction(taskId)</code> which sets status <code>running</code> and kicks off <code>runTask</code> <b>without awaiting</b> (fire-and-forget; concurrency = many at once). Delete actions surface the reference-guard error as a returned <code>{error}</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test: <code>createTask</code> then <code>runTaskAction</code> → poll <code>latestRunForTask</code> until terminal; assert succeeded with echo model. Delete-referenced returns an error object, not a throw to the client.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement; factor a tiny <code>withDb</code> helper so tests can inject a temp DB (env var <code>ORKESTRA_DB</code> read by <code>openDb</code> default).</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS. Commit: <code>feat: server actions for crud and task execution</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T12 · SSE live-output endpoint</h4>
+        <div class="meta"><b>Create:</b> <code>app/api/runs/[id]/stream/route.ts</code> · <b>Test:</b> <code>test/stream.test.ts</code></div>
+        <div class="meta"><b>Produces:</b> <code>GET</code> returning <code>text/event-stream</code>; subscribes to <code>bus</code> for the run id, emits <code>step</code>, <code>chunk</code>, <code>done</code> events; replays current persisted state first (so a late subscriber catches up), then live. Closes on <code>done</code>.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Failing test: start a run, open the route handler, collect events, assert a <code>done</code> event with final status arrives and chunks were seen.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Run → FAIL.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Implement with a <code>ReadableStream</code>; on start, write persisted steps, then <code>bus.subscribe</code>; format <code>data: JSON\n\n</code>; unsubscribe + close on done or client abort.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Run → PASS. Commit: <code>feat: sse endpoint for live run output</code>.</div>
+      </div>
+
+      <!-- PHASE E -->
+      <div class="phase-h"><span class="tag">Phase E</span><h3 style="margin:var(--s-4) 0 0">UI pages</h3></div>
+
+      <div class="task">
+        <h4>T13 · App shell, nav, design tokens</h4>
+        <div class="meta"><b>Create/Modify:</b> <code>app/layout.tsx</code>, <code>app/nav.tsx</code>, <code>app/globals.css</code>, <code>app/page.tsx</code></div>
+        <div class="meta">Left nav linking all pages (Tasks, Flows, Agents, Skills, Projects, Models, Settings). Restrained editorial palette (reuse the tokens in this plan's CSS: ivory bg, clay accent, soft shadows). Home = Tasks list.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Build the shell + nav; port the CSS token block into <code>globals.css</code>.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Manual check: <code>bun --bun run dev</code>, all nav links render (empty pages OK).</div>
+        <div class="step">- [ ] <b>Step 3</b> — Commit: <code>feat: app shell, navigation, design tokens</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T14 · Skills · Projects · Models pages</h4>
+        <div class="meta"><b>Create:</b> <code>app/skills/page.tsx</code>, <code>app/projects/page.tsx</code>, <code>app/models/page.tsx</code></div>
+        <div class="meta">Each: server component lists rows; a client form (create/edit) + delete button calling the T11 actions. Delete shows the reference-guard error inline. Models page includes a short placeholder cheat-sheet (<code>{system}</code>, <code>{input}</code>, <code>{projects}</code>, <code>{projects:--flag}</code>) and an example (<code>claude -p --append-system-prompt {system} {projects:--add-dir}</code>).</div>
+        <div class="step">- [ ] <b>Step 1</b> — Build Skills page (list + editor + delete). Verify create/edit/delete in the browser.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Build Projects page (same pattern; <code>path</code> field). Verify.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Build Models page (same; <code>command</code> textarea + cheat-sheet). Verify.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Commit: <code>feat: skills, projects, models management pages</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T15 · Agents &amp; Flows pages</h4>
+        <div class="meta"><b>Create:</b> <code>app/agents/page.tsx</code>, <code>app/flows/page.tsx</code></div>
+        <div class="meta">Agents: form with name, base-instruction textarea, model dropdown, multi-select + reorder for skills, multi-select for projects. Flows: name + ordered list builder of agents (add/remove/reorder). Both call <code>saveAgent</code>/<code>saveFlow</code>; deletes respect the guard.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Build Agents page; verify creating an agent with 0 skills and with 2 ordered skills + a project + model.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Build Flows page; verify an ordered multi-agent flow.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Commit: <code>feat: agents and flows builder pages</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T16 · Tasks page + live run view</h4>
+        <div class="meta"><b>Create:</b> <code>app/tasks/page.tsx</code>, <code>app/tasks/[id]/page.tsx</code></div>
+        <div class="meta">Tasks list: create form (title, body, target picker = flow or agent), Run button per task, status badge. Detail page: subscribes to the SSE endpoint via <code>EventSource</code>, renders per-step panels (agent name, streaming stdout, exit code, status) and the final result. This is the "add an issue → click Run → watch it" surface.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Build the list + create form + Run (calls <code>createTask</code>/<code>runTaskAction</code>).</div>
+        <div class="step">- [ ] <b>Step 2</b> — Build the detail view with <code>EventSource</code> consuming <code>step</code>/<code>chunk</code>/<code>done</code>; live-append chunks.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Verify end-to-end in browser with the echo model, then with a real <code>claude</code> model if installed.</div>
+        <div class="step">- [ ] <b>Step 4</b> — Commit: <code>feat: tasks page with live streaming run view</code>.</div>
+      </div>
+
+      <div class="task">
+        <h4>T17 · Settings page</h4>
+        <div class="meta"><b>Create:</b> <code>app/settings/page.tsx</code></div>
+        <div class="meta">Form for <code>retries</code> and <code>step_timeout_seconds</code> → <code>saveSettings</code>. Validate non-negative integers.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Build + verify persistence; confirm runner honors changed values.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Commit: <code>feat: settings page</code>.</div>
+      </div>
+
+      <!-- PHASE F -->
+      <div class="phase-h"><span class="tag">Phase F</span><h3 style="margin:var(--s-4) 0 0">End-to-end</h3></div>
+
+      <div class="task">
+        <h4>T18 · E2E happy path + seed</h4>
+        <div class="meta"><b>Create:</b> <code>test/e2e.test.ts</code>, optional <code>scripts/seed.ts</code></div>
+        <div class="meta">Programmatic E2E against a temp DB using the echo model: seed model+skills+2 agents+flow → create task targeting the flow → run → assert succeeded + 2 ordered steps + chained IO. Seed script inserts a ready-to-use <code>claude</code> model template + a sample agent/flow so a human can click Run immediately.</div>
+        <div class="step">- [ ] <b>Step 1</b> — Write the E2E test; run → PASS.</div>
+        <div class="step">- [ ] <b>Step 2</b> — Write the seed script; run it against a scratch DB and eyeball the UI.</div>
+        <div class="step">- [ ] <b>Step 3</b> — Full suite green (<code>bun test</code>). Commit: <code>test: end-to-end flow run + seed script</code>.</div>
+      </div>
+
+      <!-- REVIEW -->
+      <section>
+        <h2>After implementation</h2>
+        <p>Per the agentic-flow pipeline: a <b>separate reviewer agent</b> (fresh context) runs the app + full <code>bun test</code>, audits the diff for bugs and quality, and reports findings as a structured list — it does not fix. Builder addresses findings, re-review until clean, then <code>graphify update .</code>. No merge/PR — that's the human's call.</p>
+      </section>
+
+      <section>
+        <h2>Test strategy summary</h2>
+        <div class="grid3">
+          <div class="card"><b>Unit</b><p class="muted" style="margin:var(--s-2) 0 0">Template engine (T8), repos (T3–T7). Pure functions + <code>:memory:</code> DB. Fast, exhaustive on edge cases.</p></div>
+          <div class="card"><b>Integration</b><p class="muted" style="margin:var(--s-2) 0 0">Executor + runner (T9–T10) against the <b>echo fixture</b> — real process spawning, zero LLM, deterministic.</p></div>
+          <div class="card"><b>E2E</b><p class="muted" style="margin:var(--s-2) 0 0">Actions + full run (T11, T18). Browser verification of the Tasks streaming view. Reviewer confirms.</p></div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
