@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { PRESETS, type ModelPreset } from "./presets";
 import { listModels, createModel, updateModel, deleteModel } from "../repos/models";
+import { referencesTo } from "../refs";
 
 export interface SyncOptions {
   presets?: ModelPreset[];
@@ -20,6 +21,7 @@ export function syncModels(db: Database, opts: SyncOptions = {}): void {
   const presets = opts.presets ?? PRESETS;
   const isInstalled = opts.isInstalled ?? defaultIsInstalled;
   const existing = listModels(db);
+  // Key mirrors the table's UNIQUE(name) COLLATE NOCASE so the two never disagree.
   const byName = new Map(existing.map((m) => [m.name.toLowerCase(), m]));
   const presetNames = new Set(presets.map((p) => p.name.toLowerCase()));
 
@@ -35,11 +37,11 @@ export function syncModels(db: Database, opts: SyncOptions = {}): void {
         });
       }
     } else if (current) {
-      // Not installed: drop it unless something depends on it.
-      try {
+      // Not installed: drop it unless an agent still depends on it. Check
+      // references explicitly so real DB errors propagate instead of being
+      // swallowed as if they were the expected "referenced" case.
+      if (referencesTo(db, "model", current.id).length === 0) {
         deleteModel(db, current.id);
-      } catch {
-        // Referenced by an agent — keep it.
       }
     }
   }
