@@ -46,9 +46,9 @@ test("reopening the DB marks stale 'running' runs/steps/tasks as failed", async 
 
 test("saving a duplicate name returns a friendly error", async () => {
   const A = await import("../app/actions");
-  await A.saveModel({ name: "claude", command: "c {input}" });
+  await A.saveSkill({ name: "plan", body: "plan" });
   await expect(
-    A.saveModel({ name: "CLAUDE", command: "x" }),
+    A.saveSkill({ name: "PLAN", body: "x" }),
   ).rejects.toThrow(/already exists/i);
 });
 

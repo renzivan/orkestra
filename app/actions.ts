@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import * as Skills from "@/lib/repos/skills";
 import * as Projects from "@/lib/repos/projects";
-import * as Models from "@/lib/repos/models";
 import * as Agents from "@/lib/repos/agents";
 import * as Flows from "@/lib/repos/flows";
 import * as Tasks from "@/lib/repos/tasks";
@@ -103,19 +102,8 @@ export async function pickDirectory(): Promise<{ path: string | null }> {
   return { path: stdout.trim().replace(/\/+$/, "") };
 }
 
-// ---- Models ----
-export async function saveModel(input: { id?: number; name: string; command: string }) {
-  const row = withFriendly("model", () =>
-    input.id
-      ? Models.updateModel(db(), input.id!, input)
-      : Models.createModel(db(), input),
-  );
-  revalidate("/models");
-  return row;
-}
-export async function deleteModelAction(id: number): Promise<DeleteResult> {
-  return tryDelete(() => Models.deleteModel(db(), id), "/models");
-}
+// Models are built-in presets synced from installed CLIs (see lib/models/sync.ts);
+// they have no create/edit/delete UI.
 
 // ---- Agents ----
 export async function saveAgent(input: {

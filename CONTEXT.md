@@ -25,7 +25,7 @@ An ordered, linear pipeline of agents. Each agent runs in turn; its output feeds
 _Avoid_: Pipeline, chain, workflow, graph
 
 **Model**:
-A named, user-registered command template describing how to spawn a local CLI (e.g. `claude`, `ollama`). Orkestra fills its placeholders — the system text (base instruction + skills), the input, and the agent's project paths — to build the command it runs. An agent is assigned one model.
+A built-in preset describing how to spawn a local CLI (e.g. `claude`), defined in code and made available only when its executable is found on PATH. Its command template's placeholders — the system text (base instruction + skills), the input, and the agent's project paths — are filled to build the command Orkestra runs. An agent is assigned one model. Not user-authored: there is no models UI; presets are detected, not entered.
 _Avoid_: LLM, provider, backend, engine, adapter
 
 **Task**:
