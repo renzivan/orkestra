@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Skill } from "../types";
+import { assertNotReferenced } from "../refs";
 
 export interface SkillInput {
   name: string;
@@ -42,5 +43,6 @@ export function updateSkill(db: Database, id: number, input: SkillInput): Skill 
 }
 
 export function deleteSkill(db: Database, id: number): void {
+  assertNotReferenced(db, "skill", id);
   db.query("DELETE FROM skills WHERE id = ?").run(id);
 }

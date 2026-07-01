@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Project } from "../types";
+import { assertNotReferenced } from "../refs";
 
 export interface ProjectInput {
   name: string;
@@ -47,5 +48,6 @@ export function updateProject(
 }
 
 export function deleteProject(db: Database, id: number): void {
+  assertNotReferenced(db, "project", id);
   db.query("DELETE FROM projects WHERE id = ?").run(id);
 }

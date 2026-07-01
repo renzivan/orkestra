@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Model } from "../types";
+import { assertNotReferenced } from "../refs";
 
 export interface ModelInput {
   name: string;
@@ -43,5 +44,6 @@ export function updateModel(db: Database, id: number, input: ModelInput): Model 
 }
 
 export function deleteModel(db: Database, id: number): void {
+  assertNotReferenced(db, "model", id);
   db.query("DELETE FROM models WHERE id = ?").run(id);
 }

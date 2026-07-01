@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Agent, Project, Skill } from "../types";
+import { assertNotReferenced } from "../refs";
 
 export interface AgentInput {
   name: string;
@@ -115,5 +116,6 @@ export function getAgent(db: Database, id: number): Agent | null {
 }
 
 export function deleteAgent(db: Database, id: number): void {
+  assertNotReferenced(db, "agent", id);
   db.query("DELETE FROM agents WHERE id = ?").run(id);
 }
