@@ -32,3 +32,9 @@ let _db: Database | null = null;
 export function db(): Database {
   return (_db ??= openDb());
 }
+
+/** Test hook: drop the cached connection so the next db() re-opens. */
+export function resetDb(): void {
+  _db?.close();
+  _db = null;
+}
