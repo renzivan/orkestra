@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/types";
-import { saveProject, deleteProjectAction } from "../actions";
+import { saveProject, deleteProjectAction, pickDirectory } from "../actions";
 
 export function ProjectsClient({ projects }: { projects: Project[] }) {
   const router = useRouter();
@@ -25,6 +25,22 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
     setName(p.name);
     setPath(p.path);
     setError("");
+  }
+
+  async function choose() {
+    setError("");
+    setBusy(true);
+    try {
+      const { path: picked } = await pickDirectory();
+      if (!picked) return; // user cancelled
+      setPath(picked);
+      // Suggest a name from the folder when the field is empty.
+      if (!name.trim()) setName(picked.split("/").filter(Boolean).pop() ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function save() {
@@ -73,12 +89,18 @@ export function ProjectsClient({ projects }: { projects: Project[] }) {
           </div>
           <div>
             <label>Path</label>
-            <input
-              type="text"
-              value={path}
-              placeholder="/Users/me/dev/myapp"
-              onChange={(e) => setPath(e.target.value)}
-            />
+            <div className="row" style={{ gap: 8 }}>
+              <input
+                type="text"
+                value={path}
+                placeholder="/Users/me/dev/myapp"
+                onChange={(e) => setPath(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button className="btn" onClick={choose} disabled={busy}>
+                Choose…
+              </button>
+            </div>
           </div>
           {error && <div className="error">{error}</div>}
           <div className="row">

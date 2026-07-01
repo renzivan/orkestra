@@ -73,6 +73,36 @@ export async function deleteProjectAction(id: number): Promise<DeleteResult> {
   return tryDelete(() => Projects.deleteProject(db(), id), "/projects");
 }
 
+/**
+ * Open a native folder picker on the machine running the server and return the
+ * chosen absolute path (or null if the user cancels). This is a local dev tool,
+ * so the browser can't supply real filesystem paths — the OS dialog can.
+ */
+export async function pickDirectory(): Promise<{ path: string | null }> {
+  if (process.platform !== "darwin") {
+    throw new Error("The folder picker is only available on macOS.");
+  }
+  const proc = Bun.spawn(
+    [
+      "osascript",
+      "-e",
+      'POSIX path of (choose folder with prompt "Select a project directory")',
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (code !== 0) {
+    // Cancelling the dialog exits 1 with "User canceled." — not an error.
+    if (/User canceled/i.test(stderr)) return { path: null };
+    throw new Error(stderr.trim() || "Folder picker failed.");
+  }
+  return { path: stdout.trim().replace(/\/+$/, "") };
+}
+
 // ---- Models ----
 export async function saveModel(input: { id?: number; name: string; command: string }) {
   const row = withFriendly("model", () =>
