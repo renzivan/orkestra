@@ -8,6 +8,9 @@ export interface RunStepOptions {
   /** Converts raw stdout into clean text (e.g. parse stream-json). Default:
    *  passthrough. Stateful — pass a fresh one per call. */
   transform?: StreamTransform;
+  /** Called with the child process right after spawn — lets a caller hold the
+   *  handle (e.g. to kill it on a user stop) without reaching into exec. */
+  onSpawn?: (proc: Bun.Subprocess) => void;
 }
 
 export interface RunStepResult {
@@ -28,6 +31,7 @@ export async function runStep(opts: RunStepOptions): Promise<RunStepResult> {
     stdout: "pipe",
     stderr: "pipe",
   });
+  opts.onSpawn?.(proc);
 
   let timedOut = false;
   const timer = setTimeout(() => {

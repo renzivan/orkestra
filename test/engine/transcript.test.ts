@@ -124,3 +124,10 @@ test("claudeStream: ignores malformed lines", () => {
   expect(t.push("not json\n")).toBe("");
   expect(t.entries()).toEqual([]);
 });
+
+test("claudeStream captures the session id from the stream", () => {
+  const t = claudeStream();
+  expect(t.sessionId()).toBe("");
+  t.push(line({ type: "system", subtype: "init", session_id: "sess-abc" }));
+  expect(t.sessionId()).toBe("sess-abc");
+});

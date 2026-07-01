@@ -29,6 +29,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
   const [adapterId, setAdapterId] = useState<number | null>(null);
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("off");
+  const [skipPerms, setSkipPerms] = useState(true);
   const [skillIds, setSkillIds] = useState<number[]>([]);
   const [projectIds, setProjectIds] = useState<number[]>([]);
   const [error, setError] = useState("");
@@ -43,6 +44,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
     setAdapterId(null);
     setModel("");
     setEffort("off");
+    setSkipPerms(true);
     setSkillIds([]);
     setProjectIds([]);
     setError("");
@@ -62,6 +64,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
     setAdapterId(a.adapter_id);
     setModel(a.model);
     setEffort(a.effort || "off");
+    setSkipPerms(a.skip_permissions);
     setSkillIds(a.skills.map((s) => s.id));
     setProjectIds(a.projects.map((p) => p.id));
     setError("");
@@ -113,6 +116,7 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
         adapter_id: adapterId,
         model,
         effort,
+        skip_permissions: skipPerms,
         skill_ids: skillIds,
         project_ids: projectIds,
       });
@@ -225,6 +229,23 @@ export function AgentsClient({ agents, adapters, skills, projects }: Props) {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={skipPerms}
+                onChange={(e) => setSkipPerms(e.target.checked)}
+              />
+              <span>Skip permission prompts</span>
+            </label>
+            <div className="muted" style={{ fontSize: 13 }}>
+              Agents run non-interactively, so they can’t answer approval
+              prompts. Leave on so the agent can edit files and run tools
+              (passes <code>--dangerously-skip-permissions</code>). Turn off only
+              for read-only agents.
             </div>
           </div>
 

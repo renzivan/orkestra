@@ -25,6 +25,8 @@ export interface StreamTransform {
   end(): string;
   /** Current transcript snapshot. */
   entries(): TranscriptEntry[];
+  /** CLI session id seen in the stream (""), for resuming the conversation. */
+  sessionId(): string;
 }
 
 /** Plain-text CLIs: stdout IS the answer; the transcript is one growing block. */
@@ -41,7 +43,7 @@ export function passthrough(onChange?: () => void): StreamTransform {
     onChange?.();
     return raw;
   };
-  return { push: feed, end: () => "", entries: () => list };
+  return { push: feed, end: () => "", entries: () => list, sessionId: () => "" };
 }
 
 /**
@@ -53,6 +55,7 @@ export function passthrough(onChange?: () => void): StreamTransform {
 export function claudeStream(onChange?: () => void): StreamTransform {
   const list: TranscriptEntry[] = [];
   let buffer = "";
+  let sessionId = "";
   // Content-block index -> entry, for the CURRENT assistant message. Block
   // indices restart at 0 each message, so this is cleared on message_start.
   let openByIndex = new Map<number, TranscriptEntry>();
@@ -71,6 +74,9 @@ export function claudeStream(onChange?: () => void): StreamTransform {
   };
 
   const handle = (obj: Record<string, unknown>): string => {
+    if (typeof obj.session_id === "string" && obj.session_id) {
+      sessionId = obj.session_id;
+    }
     const type = obj.type;
     if (type === "stream_event") return handleStreamEvent(rec(obj.event));
     if (type === "assistant") {
@@ -185,6 +191,7 @@ export function claudeStream(onChange?: () => void): StreamTransform {
       });
     },
     entries: () => list,
+    sessionId: () => sessionId,
   };
 }
 

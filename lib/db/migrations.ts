@@ -120,4 +120,76 @@ export const MIGRATIONS: string[][] = [
   // tool calls, tool results, answer text) streamed and rendered as the step
   // runs. `output` remains the clean answer text chained into the next agent.
   [`ALTER TABLE run_steps ADD COLUMN transcript TEXT NOT NULL DEFAULT '[]'`],
+
+  // v4 — capture the CLI session id per step so a finished run can be resumed
+  // (the user replies to a question, continuing the same conversation).
+  [`ALTER TABLE run_steps ADD COLUMN session_id TEXT`],
+
+  // v5 — per-agent permission handling. Agents run headless (claude -p), so
+  // there's no one to answer permission prompts; default to skipping them
+  // (--dangerously-skip-permissions) so agents can actually act.
+  [`ALTER TABLE agents ADD COLUMN skip_permissions INTEGER NOT NULL DEFAULT 1`],
+
+  // v6 — add a 'stopped' status (user-initiated stop, distinct from a crash) to
+  // tasks/runs/run_steps. SQLite can't alter a CHECK constraint, so each table
+  // is rebuilt in place (create-new → copy → drop → rename), preserving all
+  // columns and rows. FK enforcement is disabled for the swap so dropping a
+  // referenced table doesn't error; the copied rows keep every relationship
+  // intact. SELECT * relies on the new tables declaring columns in the same
+  // order as the live ones (including v2–v4 additions at the end).
+  [
+    `PRAGMA foreign_keys=OFF`,
+
+    `CREATE TABLE tasks_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      target_type TEXT NOT NULL CHECK (target_type IN ('flow','agent')),
+      target_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','running','succeeded','failed','stopped')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+    `INSERT INTO tasks_new SELECT * FROM tasks`,
+    `DROP TABLE tasks`,
+    `ALTER TABLE tasks_new RENAME TO tasks`,
+
+    `CREATE TABLE runs_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running','succeeded','failed','stopped')),
+      final_output TEXT,
+      error TEXT,
+      started_at TEXT NOT NULL,
+      finished_at TEXT
+    )`,
+    `INSERT INTO runs_new SELECT * FROM runs`,
+    `DROP TABLE runs`,
+    `ALTER TABLE runs_new RENAME TO runs`,
+
+    `CREATE TABLE run_steps_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      agent_id INTEGER NOT NULL,
+      agent_name TEXT NOT NULL,
+      input TEXT NOT NULL DEFAULT '',
+      output TEXT NOT NULL DEFAULT '',
+      exit_code INTEGER,
+      error TEXT,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running','succeeded','failed','stopped')),
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      transcript TEXT NOT NULL DEFAULT '[]',
+      session_id TEXT
+    )`,
+    `INSERT INTO run_steps_new SELECT * FROM run_steps`,
+    `DROP TABLE run_steps`,
+    `ALTER TABLE run_steps_new RENAME TO run_steps`,
+
+    `PRAGMA foreign_keys=ON`,
+  ],
 ];

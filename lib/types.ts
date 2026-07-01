@@ -29,6 +29,7 @@ export interface Agent {
   adapter_id: number;
   model: string;
   effort: string; // "" means off (no --effort flag)
+  skip_permissions: boolean; // headless runs: skip approval prompts so it can act
   skills: Skill[];
   projects: Project[];
   created_at: string;
@@ -44,8 +45,13 @@ export interface Flow {
 }
 
 export type TargetType = "flow" | "agent";
-export type TaskStatus = "pending" | "running" | "succeeded" | "failed";
-export type RunStatus = "running" | "succeeded" | "failed";
+export type TaskStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "stopped";
+export type RunStatus = "running" | "succeeded" | "failed" | "stopped";
 
 export interface Task {
   id: number;
@@ -68,6 +74,8 @@ export interface RunStep {
   output: string;
   /** JSON array of TranscriptEntry (lib/engine/transcript) — live step activity. */
   transcript: string;
+  /** CLI session id, if captured — lets a finished run be resumed with a reply. */
+  session_id: string | null;
   exit_code: number | null;
   error: string | null;
   status: RunStatus;

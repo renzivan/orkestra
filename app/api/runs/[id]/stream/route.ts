@@ -72,6 +72,7 @@ export async function GET(
           position: s.position,
           agent_name: s.agent_name,
           step_id: s.id,
+          input: s.input,
         });
         const entries = parseTranscript(s.transcript);
         if (entries.length > 0) {

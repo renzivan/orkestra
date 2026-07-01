@@ -32,13 +32,6 @@ export default async function TaskDetailPage({
         <span className={`badge ${task.status}`}>{task.status}</span>
       </div>
 
-      {task.body && (
-        <div className="card">
-          <label>Input</label>
-          <pre className="output">{task.body}</pre>
-        </div>
-      )}
-
       <RunView task={task} initialRun={run} />
     </>
   );

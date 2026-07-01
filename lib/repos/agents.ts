@@ -8,6 +8,8 @@ export interface AgentInput {
   adapter_id: number;
   model: string;
   effort: string;
+  /** Skip headless permission prompts (default true — see migration v5). */
+  skip_permissions?: boolean;
   skill_ids: number[];
   project_ids: number[];
 }
@@ -19,6 +21,7 @@ interface AgentRow {
   adapter_id: number;
   model: string;
   effort: string;
+  skip_permissions: number; // SQLite 0/1
   created_at: string;
   updated_at: string;
 }
@@ -28,8 +31,8 @@ export function createAgent(db: Database, input: AgentInput): Agent {
   const insert = db.transaction((i: AgentInput) => {
     const row = db
       .query(
-        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, created_at, updated_at)
-         VALUES ($name, $base, $adapter, $model, $effort, $now, $now) RETURNING id`,
+        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, skip_permissions, created_at, updated_at)
+         VALUES ($name, $base, $adapter, $model, $effort, $skip, $now, $now) RETURNING id`,
       )
       .get({
         $name: i.name,
@@ -37,6 +40,7 @@ export function createAgent(db: Database, input: AgentInput): Agent {
         $adapter: i.adapter_id,
         $model: i.model,
         $effort: i.effort,
+        $skip: (i.skip_permissions ?? true) ? 1 : 0,
         $now: now,
       }) as { id: number };
     writeRelations(db, row.id, i);
@@ -57,7 +61,7 @@ export function updateAgent(
       .query(
         `UPDATE agents SET name = $name, base_instruction = $base,
            adapter_id = $adapter, model = $model, effort = $effort,
-           updated_at = $now WHERE id = $id`,
+           skip_permissions = $skip, updated_at = $now WHERE id = $id`,
       )
       .run({
         $id: id,
@@ -66,6 +70,7 @@ export function updateAgent(
         $adapter: i.adapter_id,
         $model: i.model,
         $effort: i.effort,
+        $skip: (i.skip_permissions ?? true) ? 1 : 0,
         $now: now,
       });
     if (res.changes === 0) throw new Error(`agent ${id} not found`);
@@ -121,7 +126,7 @@ export function getAgent(db: Database, id: number): Agent | null {
     )
     .all(id) as Project[];
 
-  return { ...row, skills, projects };
+  return { ...row, skip_permissions: row.skip_permissions === 1, skills, projects };
 }
 
 export function deleteAgent(db: Database, id: number): void {

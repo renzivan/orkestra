@@ -8,7 +8,8 @@ import * as Agents from "@/lib/repos/agents";
 import * as Flows from "@/lib/repos/flows";
 import * as Tasks from "@/lib/repos/tasks";
 import * as Settings from "@/lib/repos/settings";
-import { runTask } from "@/lib/engine/runner";
+import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
+import { stop } from "@/lib/engine/registry";
 import type { Settings as SettingsT, TargetType } from "@/lib/types";
 
 export type DeleteResult = { ok: true } | { ok: false; error: string };
@@ -113,6 +114,7 @@ export async function saveAgent(input: {
   adapter_id: number;
   model: string;
   effort: string;
+  skip_permissions?: boolean;
   skill_ids: number[];
   project_ids: number[];
 }) {
@@ -172,5 +174,38 @@ export async function runTaskAction(taskId: number): Promise<{ ok: true }> {
   void runTask(db(), taskId).catch(() => {
     /* failure is persisted on the run/task by runTask itself */
   });
+  return { ok: true };
+}
+
+/** Reply to a finished run, resuming its conversation with another step. */
+export async function replyToRunAction(
+  runId: number,
+  text: string,
+): Promise<{ ok: true }> {
+  // replyToRun reopens the run + adds the step synchronously before its first
+  // await, so a refresh right after this sees the run 'running'.
+  void replyToRun(db(), runId, text).catch(() => {
+    /* failure is persisted on the run/task by replyToRun itself */
+  });
+  revalidate("/tasks");
+  return { ok: true };
+}
+
+/** Stop a running run: flag it aborted and kill its live process. The runner
+ *  transitions the run/task to 'stopped' and publishes the terminal event. */
+export async function stopRunAction(runId: number): Promise<{ ok: true }> {
+  stop(runId);
+  revalidate("/tasks");
+  return { ok: true };
+}
+
+/** Resume a stopped run: re-run from its interrupted step, keeping prior work. */
+export async function resumeRunAction(runId: number): Promise<{ ok: true }> {
+  // resumeRun reopens the run + resets the step synchronously before its first
+  // await, so a refresh right after this sees the run 'running'.
+  void resumeRun(db(), runId).catch(() => {
+    /* failure is persisted on the run/task by resumeRun itself */
+  });
+  revalidate("/tasks");
   return { ok: true };
 }

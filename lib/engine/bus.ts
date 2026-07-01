@@ -12,7 +12,7 @@
 import type { TranscriptEntry } from "./transcript";
 
 export type RunEvent =
-  | { type: "step"; position: number; agent_name: string; step_id: number }
+  | { type: "step"; position: number; agent_name: string; step_id: number; input: string }
   | { type: "transcript"; position: number; entries: TranscriptEntry[] }
   | { type: "step_done"; position: number; status: string; exit_code: number | null }
   | { type: "done"; status: string };

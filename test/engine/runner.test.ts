@@ -9,9 +9,12 @@ import * as Flows from "../../lib/repos/flows";
 import * as Tasks from "../../lib/repos/tasks";
 import * as Runs from "../../lib/repos/runs";
 import * as Settings from "../../lib/repos/settings";
-import { runTask } from "../../lib/engine/runner";
+import { runTask, replyToRun } from "../../lib/engine/runner";
 
 const ECHO = "bash test/fixtures/echo-model.sh";
+// Emits a stable session_id + echoes stdin; "stream-json" in the command makes
+// the runner parse it as Claude output (so session capture kicks in).
+const SESSION = "bash test/fixtures/session-model.sh stream-json";
 
 function agent(db: any, name: string, adapterId: number) {
   return Agents.createAgent(db, {
@@ -63,6 +66,51 @@ test("single-agent task runs one step", async () => {
   const run = await runTask(db, t.id);
   expect(run.status).toBe("succeeded");
   expect(Runs.getRunWithSteps(db, run.id).steps.length).toBe(1);
+});
+
+test("captures session id and replies resume the run with a new step", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "sess", command: SESSION });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const run = await runTask(db, t.id);
+  expect(run.status).toBe("succeeded");
+  let full = Runs.getRunWithSteps(db, run.id);
+  expect(full.steps.length).toBe(1);
+  expect(full.steps[0].output).toBe("echo:hi");
+  expect(full.steps[0].session_id).toBe("sess-123"); // captured
+
+  // Reply → appends a second step, resumes, run succeeds again.
+  const replied = await replyToRun(db, run.id, "more");
+  expect(replied.status).toBe("succeeded");
+  full = Runs.getRunWithSteps(db, run.id);
+  expect(full.steps.length).toBe(2);
+  expect(full.steps[1].position).toBe(1);
+  expect(full.steps[1].input).toBe("more");
+  expect(full.steps[1].output).toBe("echo:more");
+  expect(full.final_output).toBe("echo:more");
+  expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
+});
+
+test("replying to a run without a session id throws", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+  const run = await runTask(db, t.id);
+  expect(run.steps[run.steps.length - 1].session_id).toBeNull();
+  await expect(replyToRun(db, run.id, "x")).rejects.toThrow(/not resumable/i);
 });
 
 test("failing step retries then fails, stopping the flow", async () => {

@@ -99,6 +99,40 @@ export function clearStepTranscript(db: Database, stepId: number): void {
   db.query("UPDATE run_steps SET transcript = '[]' WHERE id = ?").run(stepId);
 }
 
+/** Store the CLI session id captured for a step (used to resume the run). */
+export function setStepSession(
+  db: Database,
+  stepId: number,
+  sessionId: string,
+): void {
+  db.query("UPDATE run_steps SET session_id = $s WHERE id = $id").run({
+    $id: stepId,
+    $s: sessionId,
+  });
+}
+
+/** Reopen a finished run so a reply can append another step. */
+export function reopenRun(db: Database, id: number): void {
+  db.query(
+    "UPDATE runs SET status='running', finished_at=NULL, error=NULL WHERE id=?",
+  ).run(id);
+}
+
+/**
+ * Delete a run's steps at `position` and beyond. Used to resume a stopped run:
+ * the interrupted step (and anything after it) is removed so it can be re-run
+ * fresh, while completed earlier steps are kept.
+ */
+export function deleteStepsFrom(
+  db: Database,
+  runId: number,
+  position: number,
+): void {
+  db.query(
+    "DELETE FROM run_steps WHERE run_id = $r AND position >= $p",
+  ).run({ $r: runId, $p: position });
+}
+
 /**
  * Mark any run/step/task left in 'running' as failed. Called on startup so a
  * process that crashed mid-run doesn't leave rows stuck forever.

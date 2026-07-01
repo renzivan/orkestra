@@ -4,6 +4,10 @@ export interface TemplateContext {
   projects: string[];
   model: string;
   effort: string;
+  /** CLI session id to resume; empty drops the flag (a fresh conversation). */
+  resume: string;
+  /** Emit the bare permission-skip flag (no value) when true. */
+  skip: boolean;
 }
 
 /**
@@ -15,8 +19,10 @@ export interface TemplateContext {
  *
  * Flag placeholders (a token of the form {name:--flag}):
  *   {projects:--flag} -> per path, emit `--flag <path>`
- *   {model:--flag} / {effort:--flag} -> emit `--flag <value>`, or nothing if
- *   the value is empty (so an unset effort drops the flag entirely).
+ *   {model:--flag} / {effort:--flag} / {resume:--flag} -> emit `--flag <value>`,
+ *   or nothing if the value is empty (so an unset effort/resume drops the flag).
+ *   {skip:--flag} -> emit the bare `--flag` (no value) when skip is true, else
+ *   nothing.
  *   {projects} alone -> one token per path.
  */
 export function buildArgv(command: string, ctx: TemplateContext): string[] {
@@ -27,13 +33,17 @@ export function buildArgv(command: string, ctx: TemplateContext): string[] {
       argv.push(...ctx.projects);
       continue;
     }
-    const flagMatch = token.match(/^\{(projects|model|effort):(.+)\}$/);
+    const flagMatch = token.match(
+      /^\{(projects|model|effort|resume|skip):(.+)\}$/,
+    );
     if (flagMatch) {
       const [, name, flag] = flagMatch;
       if (name === "projects") {
         for (const p of ctx.projects) argv.push(flag, p);
+      } else if (name === "skip") {
+        if (ctx.skip) argv.push(flag); // bare boolean flag, no value
       } else {
-        const value = ctx[name as "model" | "effort"];
+        const value = ctx[name as "model" | "effort" | "resume"];
         if (value !== "") argv.push(flag, value);
       }
       continue;

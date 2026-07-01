@@ -44,5 +44,36 @@ test("an existing v1 database migrates to the adapter schema", () => {
   // Simulate a pre-migration DB by forcing it back to v1 shape would be complex;
   // instead assert the migration runner brings a fresh DB to the latest version.
   const version = (db.query("PRAGMA user_version").get() as any).user_version;
-  expect(version).toBe(3);
+  expect(version).toBe(6);
+});
+
+test("v5 accepts the 'stopped' status on tasks, runs and run_steps", () => {
+  const db = openDb(":memory:");
+  const now = new Date().toISOString();
+  db.query(
+    `INSERT INTO tasks (title, body, target_type, target_id, status, created_at, updated_at)
+     VALUES ('T','', 'agent', 1, 'stopped', $now, $now)`,
+  ).run({ $now: now });
+  const task: any = db.query("SELECT * FROM tasks ORDER BY id DESC LIMIT 1").get();
+  expect(task.status).toBe("stopped");
+
+  db.query(
+    `INSERT INTO runs (task_id, status, started_at) VALUES ($t, 'stopped', $now)`,
+  ).run({ $t: task.id, $now: now });
+  const run: any = db.query("SELECT * FROM runs ORDER BY id DESC LIMIT 1").get();
+  expect(run.status).toBe("stopped");
+
+  db.query(
+    `INSERT INTO run_steps (run_id, position, agent_id, agent_name, status, started_at)
+     VALUES ($r, 0, 1, 'a', 'stopped', $now)`,
+  ).run({ $r: run.id, $now: now });
+  const step: any = db.query("SELECT * FROM run_steps ORDER BY id DESC LIMIT 1").get();
+  expect(step.status).toBe("stopped");
+
+  // The CHECK constraint is still enforced — a bogus status is rejected.
+  expect(() =>
+    db.query(
+      `INSERT INTO runs (task_id, status, started_at) VALUES ($t, 'bogus', $now)`,
+    ).run({ $t: task.id, $now: now }),
+  ).toThrow();
 });

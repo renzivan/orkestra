@@ -7,6 +7,8 @@ const ctx = {
   projects: ["/a b", "/c"],
   model: "opus",
   effort: "high",
+  resume: "",
+  skip: false,
 };
 
 test("{system} becomes a single argv token", () => {
@@ -67,6 +69,28 @@ test("{effort:--flag} emits nothing when effort is empty", () => {
 
 test("bare {model} substitutes in place", () => {
   expect(buildArgv("m={model}", ctx)).toEqual(["m=opus"]);
+});
+
+test("{resume:--flag} drops when empty, emits when set", () => {
+  expect(buildArgv("c {resume:--resume} d", ctx)).toEqual(["c", "d"]);
+  expect(buildArgv("c {resume:--resume}", { ...ctx, resume: "sid-1" })).toEqual([
+    "c",
+    "--resume",
+    "sid-1",
+  ]);
+});
+
+test("{skip:--flag} emits the bare flag only when true", () => {
+  expect(buildArgv("c {skip:--dangerously-skip-permissions} d", ctx)).toEqual([
+    "c",
+    "d",
+  ]);
+  expect(
+    buildArgv("c {skip:--dangerously-skip-permissions} d", {
+      ...ctx,
+      skip: true,
+    }),
+  ).toEqual(["c", "--dangerously-skip-permissions", "d"]);
 });
 
 test("full claude template", () => {

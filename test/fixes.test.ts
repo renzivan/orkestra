@@ -73,7 +73,13 @@ test("SSE subscribes before replay so live events aren't lost", async () => {
   });
 
   // Route has subscribed synchronously; publish live events now.
-  publish(run.id, { type: "step", position: 0, agent_name: "a", step_id: 1 });
+  publish(run.id, {
+    type: "step",
+    position: 0,
+    agent_name: "a",
+    step_id: 1,
+    input: "x",
+  });
   publish(run.id, {
     type: "transcript",
     position: 0,
