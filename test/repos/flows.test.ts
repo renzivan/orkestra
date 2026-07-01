@@ -1,23 +1,27 @@
 import { expect, test } from "bun:test";
 import { openDb } from "../../lib/db";
 import * as Skills from "../../lib/repos/skills";
-import * as Models from "../../lib/repos/models";
+import * as Adapters from "../../lib/repos/adapters";
 import * as Agents from "../../lib/repos/agents";
 import * as R from "../../lib/repos/flows";
 
 function twoAgents(db: ReturnType<typeof openDb>) {
-  const m = Models.createModel(db, { name: "claude", command: "claude {input}" });
+  const ad = Adapters.createAdapter(db, { name: "claude", command: "claude {input}" });
   const a1 = Agents.createAgent(db, {
     name: "a1",
     base_instruction: "one",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });
   const a2 = Agents.createAgent(db, {
     name: "a2",
     base_instruction: "two",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });

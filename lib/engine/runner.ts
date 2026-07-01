@@ -3,7 +3,7 @@ import type { Agent, Task } from "../types";
 import { getTask, setTaskStatus } from "../repos/tasks";
 import { getFlow } from "../repos/flows";
 import { getAgent } from "../repos/agents";
-import { getModel } from "../repos/models";
+import { getAdapter } from "../repos/adapters";
 import { getSettings } from "../repos/settings";
 import * as Runs from "../repos/runs";
 import { buildArgv } from "./template";
@@ -31,12 +31,19 @@ export async function runTask(
   try {
     for (let pos = 0; pos < agents.length; pos++) {
       const agent = agents[pos];
-      const model = getModel(db, agent.model_id);
-      if (!model) throw new Error(`agent "${agent.name}" has no model`);
+      const adapter = getAdapter(db, agent.adapter_id);
+      if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
 
       const system = buildSystem(agent);
       const projects = agent.projects.map((p) => p.path);
-      const argv = buildArgv(model.command, { system, input, projects });
+      const effort = agent.effort === "off" ? "" : agent.effort;
+      const argv = buildArgv(adapter.command, {
+        system,
+        input,
+        projects,
+        model: agent.model,
+        effort,
+      });
 
       const stepId = Runs.addRunStep(db, run.id, {
         position: pos,

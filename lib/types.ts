@@ -14,7 +14,7 @@ export interface Project {
   updated_at: string;
 }
 
-export interface Model {
+export interface Adapter {
   id: number;
   name: string;
   command: string;
@@ -26,7 +26,9 @@ export interface Agent {
   id: number;
   name: string;
   base_instruction: string;
-  model_id: number;
+  adapter_id: number;
+  model: string;
+  effort: string; // "" means off (no --effort flag)
   skills: Skill[];
   projects: Project[];
   created_at: string;

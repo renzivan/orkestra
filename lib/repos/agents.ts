@@ -5,7 +5,9 @@ import { assertNotReferenced } from "../refs";
 export interface AgentInput {
   name: string;
   base_instruction: string;
-  model_id: number;
+  adapter_id: number;
+  model: string;
+  effort: string;
   skill_ids: number[];
   project_ids: number[];
 }
@@ -14,7 +16,9 @@ interface AgentRow {
   id: number;
   name: string;
   base_instruction: string;
-  model_id: number;
+  adapter_id: number;
+  model: string;
+  effort: string;
   created_at: string;
   updated_at: string;
 }
@@ -24,13 +28,15 @@ export function createAgent(db: Database, input: AgentInput): Agent {
   const insert = db.transaction((i: AgentInput) => {
     const row = db
       .query(
-        `INSERT INTO agents (name, base_instruction, model_id, created_at, updated_at)
-         VALUES ($name, $base, $model, $now, $now) RETURNING id`,
+        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, created_at, updated_at)
+         VALUES ($name, $base, $adapter, $model, $effort, $now, $now) RETURNING id`,
       )
       .get({
         $name: i.name,
         $base: i.base_instruction,
-        $model: i.model_id,
+        $adapter: i.adapter_id,
+        $model: i.model,
+        $effort: i.effort,
         $now: now,
       }) as { id: number };
     writeRelations(db, row.id, i);
@@ -50,13 +56,16 @@ export function updateAgent(
     const res = db
       .query(
         `UPDATE agents SET name = $name, base_instruction = $base,
-           model_id = $model, updated_at = $now WHERE id = $id`,
+           adapter_id = $adapter, model = $model, effort = $effort,
+           updated_at = $now WHERE id = $id`,
       )
       .run({
         $id: id,
         $name: i.name,
         $base: i.base_instruction,
-        $model: i.model_id,
+        $adapter: i.adapter_id,
+        $model: i.model,
+        $effort: i.effort,
         $now: now,
       });
     if (res.changes === 0) throw new Error(`agent ${id} not found`);

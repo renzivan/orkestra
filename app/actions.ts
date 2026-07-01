@@ -110,7 +110,9 @@ export async function saveAgent(input: {
   id?: number;
   name: string;
   base_instruction: string;
-  model_id: number;
+  adapter_id: number;
+  model: string;
+  effort: string;
   skill_ids: number[];
   project_ids: number[];
 }) {

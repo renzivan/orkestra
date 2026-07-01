@@ -2,44 +2,66 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Agent, Model, Project, Skill } from "@/lib/types";
+import type { Agent, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
 import { useConfirm } from "../confirm-dialog";
 
+export interface AdapterChoice {
+  id: number;
+  name: string;
+  models: string[];
+  efforts: string[];
+}
+
 interface Props {
   agents: Agent[];
-  models: Model[];
+  adapters: AdapterChoice[];
   skills: Skill[];
   projects: Project[];
 }
 
-export function AgentsClient({ agents, models, skills, projects }: Props) {
+export function AgentsClient({ agents, adapters, skills, projects }: Props) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
   const [editing, setEditing] = useState<Agent | null>(null);
   const [name, setName] = useState("");
   const [base, setBase] = useState("");
-  const [modelId, setModelId] = useState<number | null>(null);
+  const [adapterId, setAdapterId] = useState<number | null>(null);
+  const [model, setModel] = useState("");
+  const [effort, setEffort] = useState("off");
   const [skillIds, setSkillIds] = useState<number[]>([]);
   const [projectIds, setProjectIds] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const selectedAdapter = adapters.find((a) => a.id === adapterId) ?? null;
+
   function reset() {
     setEditing(null);
     setName("");
     setBase("");
-    setModelId(null);
+    setAdapterId(null);
+    setModel("");
+    setEffort("off");
     setSkillIds([]);
     setProjectIds([]);
     setError("");
+  }
+
+  function chooseAdapter(id: number | null) {
+    setAdapterId(id);
+    const a = adapters.find((x) => x.id === id);
+    setModel(a?.models[0] ?? "");
+    setEffort(a?.efforts[0] ?? "off");
   }
 
   function startEdit(a: Agent) {
     setEditing(a);
     setName(a.name);
     setBase(a.base_instruction);
-    setModelId(a.model_id);
+    setAdapterId(a.adapter_id);
+    setModel(a.model);
+    setEffort(a.effort || "off");
     setSkillIds(a.skills.map((s) => s.id));
     setProjectIds(a.projects.map((p) => p.id));
     setError("");
@@ -47,6 +69,9 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
 
   function skillName(id: number) {
     return skills.find((s) => s.id === id)?.name ?? `#${id}`;
+  }
+  function adapterName(id: number) {
+    return adapters.find((a) => a.id === id)?.name ?? "—";
   }
 
   function addSkill(id: number) {
@@ -73,14 +98,17 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
 
   async function save() {
     if (!name.trim()) return setError("Name is required.");
-    if (!modelId) return setError("A model is required.");
+    if (!adapterId) return setError("An adapter is required.");
+    if (!model) return setError("A model is required.");
     setBusy(true);
     try {
       await saveAgent({
         id: editing?.id,
         name: name.trim(),
         base_instruction: base,
-        model_id: modelId,
+        adapter_id: adapterId,
+        model,
+        effort,
         skill_ids: skillIds,
         project_ids: projectIds,
       });
@@ -109,7 +137,7 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
   }
 
   const availableSkills = skills.filter((s) => !skillIds.includes(s.id));
-  const noModels = models.length === 0;
+  const noAdapters = adapters.length === 0;
 
   return (
     <>
@@ -117,15 +145,15 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
       <div className="page-head">
         <div>
           <h1>Agents</h1>
-          <p>Base instruction + optional skills + projects, running on one model.</p>
+          <p>Base instruction + optional skills + projects, running on an adapter.</p>
         </div>
       </div>
 
-      {noModels && (
+      {noAdapters && (
         <div className="card">
           <div className="muted">
-            No model available. Models are detected from installed CLIs — install
-            the <code>claude</code> CLI (on your PATH), then reload this page.
+            No adapter available. Adapters are detected from installed CLIs —
+            install the <code>claude</code> CLI (on your PATH), then reload.
           </div>
         </div>
       )}
@@ -150,19 +178,50 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
               onChange={(e) => setBase(e.target.value)}
             />
           </div>
-          <div>
-            <label>Model</label>
-            <select
-              value={modelId ?? ""}
-              onChange={(e) => setModelId(Number(e.target.value) || null)}
-            >
-              <option value="">Select a model…</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+
+          <div className="row" style={{ alignItems: "flex-start" }}>
+            <div style={{ flex: 1 }}>
+              <label>Adapter</label>
+              <select
+                value={adapterId ?? ""}
+                onChange={(e) => chooseAdapter(Number(e.target.value) || null)}
+              >
+                <option value="">Select an adapter…</option>
+                {adapters.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Model</label>
+              <select
+                value={model}
+                disabled={!selectedAdapter}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                {(selectedAdapter?.models ?? []).map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Thinking effort</label>
+              <select
+                value={effort}
+                disabled={!selectedAdapter}
+                onChange={(e) => setEffort(e.target.value)}
+              >
+                {(selectedAdapter?.efforts ?? ["off"]).map((ef) => (
+                  <option key={ef} value={ef}>
+                    {ef}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
@@ -248,7 +307,7 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
 
           {error && <div className="error">{error}</div>}
           <div className="row">
-            <button className="btn primary" onClick={save} disabled={busy || noModels}>
+            <button className="btn primary" onClick={save} disabled={busy || noAdapters}>
               {editing ? "Save changes" : "Add agent"}
             </button>
             {editing && (
@@ -268,7 +327,7 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Model</th>
+                <th>Adapter · Model · Effort</th>
                 <th>Skills</th>
                 <th>Projects</th>
                 <th style={{ width: 140 }}></th>
@@ -281,7 +340,8 @@ export function AgentsClient({ agents, models, skills, projects }: Props) {
                     <strong>{a.name}</strong>
                   </td>
                   <td className="muted">
-                    {models.find((m) => m.id === a.model_id)?.name ?? "—"}
+                    {adapterName(a.adapter_id)} · {a.model}
+                    {a.effort && a.effort !== "off" ? ` · ${a.effort}` : ""}
                   </td>
                   <td className="muted">
                     {a.skills.map((s) => s.name).join(", ") || "—"}

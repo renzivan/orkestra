@@ -20,24 +20,28 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 test("end to end: build a flow via actions, run a task, chain succeeds", async () => {
   const { db } = await import("../lib/db");
   const A = await import("../app/actions");
-  const Models = await import("../lib/repos/models");
+  const Adapters = await import("../lib/repos/adapters");
   const Runs = await import("../lib/repos/runs");
 
-  const m = Models.createModel(db(), {
+  const ad = Adapters.createAdapter(db(), {
     name: "echo",
     command: "bash test/fixtures/echo-model.sh",
   });
   const a1 = await A.saveAgent({
     name: "first",
     base_instruction: "one",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });
   const a2 = await A.saveAgent({
     name: "second",
     base_instruction: "two",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });

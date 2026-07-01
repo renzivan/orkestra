@@ -1,21 +1,33 @@
 import { db } from "@/lib/db";
 import { listAgents } from "@/lib/repos/agents";
-import { listModels } from "@/lib/repos/models";
+import { listAdapters } from "@/lib/repos/adapters";
 import { listSkills } from "@/lib/repos/skills";
 import { listProjects } from "@/lib/repos/projects";
-import { syncModels } from "@/lib/models/sync";
-import { AgentsClient } from "./agents-client";
+import { syncAdapters } from "@/lib/adapters/sync";
+import { presetByName } from "@/lib/adapters/presets";
+import { AgentsClient, type AdapterChoice } from "./agents-client";
 
 export const dynamic = "force-dynamic";
 
 export default function AgentsPage() {
   const database = db();
-  // Models are built-in presets, available only when their CLI is installed.
-  syncModels(database);
+  // Adapters are built-in presets, available only when their CLI is installed.
+  syncAdapters(database);
+
+  const adapters: AdapterChoice[] = listAdapters(database).map((a) => {
+    const preset = presetByName(a.name);
+    return {
+      id: a.id,
+      name: a.name,
+      models: preset?.models ?? [],
+      efforts: preset?.efforts ?? ["off"],
+    };
+  });
+
   return (
     <AgentsClient
       agents={listAgents(database)}
-      models={listModels(database)}
+      adapters={adapters}
       skills={listSkills(database)}
       projects={listProjects(database)}
     />

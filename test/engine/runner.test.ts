@@ -3,7 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync, readFileSync } from "fs";
 import { openDb } from "../../lib/db";
-import * as Models from "../../lib/repos/models";
+import * as Adapters from "../../lib/repos/adapters";
 import * as Agents from "../../lib/repos/agents";
 import * as Flows from "../../lib/repos/flows";
 import * as Tasks from "../../lib/repos/tasks";
@@ -13,11 +13,13 @@ import { runTask } from "../../lib/engine/runner";
 
 const ECHO = "bash test/fixtures/echo-model.sh";
 
-function agent(db: any, name: string, modelId: number) {
+function agent(db: any, name: string, adapterId: number) {
   return Agents.createAgent(db, {
     name,
     base_instruction: name,
-    model_id: modelId,
+    adapter_id: adapterId,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });
@@ -25,7 +27,7 @@ function agent(db: any, name: string, modelId: number) {
 
 test("two-agent flow chains output into next input", async () => {
   const db = openDb(":memory:");
-  const m = Models.createModel(db, { name: "echo", command: ECHO });
+  const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "a1", m.id);
   const a2 = agent(db, "a2", m.id);
   const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
@@ -49,7 +51,7 @@ test("two-agent flow chains output into next input", async () => {
 
 test("single-agent task runs one step", async () => {
   const db = openDb(":memory:");
-  const m = Models.createModel(db, { name: "echo", command: ECHO });
+  const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
   const t = Tasks.createTask(db, {
     title: "T",
@@ -69,11 +71,11 @@ test("failing step retries then fails, stopping the flow", async () => {
   if (existsSync(counter)) rmSync(counter);
   Settings.updateSettings(db, { retries: 1, step_timeout_seconds: 5 });
 
-  const failing = Models.createModel(db, {
+  const failing = Adapters.createAdapter(db, {
     name: "fail",
     command: `bash -c 'echo x >> ${counter}; exit 1'`,
   });
-  const okModel = Models.createModel(db, { name: "echo", command: ECHO });
+  const okModel = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "boom", failing.id);
   const a2 = agent(db, "never", okModel.id);
   const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });

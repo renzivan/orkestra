@@ -36,21 +36,23 @@ async function collectEvents(body: ReadableStream<Uint8Array>) {
 
 test("stream replays a finished run and emits a done event", async () => {
   const { db } = await import("../lib/db");
-  const Models = await import("../lib/repos/models");
+  const Adapters = await import("../lib/repos/adapters");
   const Agents = await import("../lib/repos/agents");
   const Tasks = await import("../lib/repos/tasks");
   const Runs = await import("../lib/repos/runs");
   const { runTask } = await import("../lib/engine/runner");
   const { GET } = await import("../app/api/runs/[id]/stream/route");
 
-  const m = Models.createModel(db(), {
+  const ad = Adapters.createAdapter(db(), {
     name: "echo",
     command: "bash test/fixtures/echo-model.sh",
   });
   const a = Agents.createAgent(db(), {
     name: "solo",
     base_instruction: "b",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });

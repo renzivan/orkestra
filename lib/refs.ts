@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Ref } from "./types";
 
-export type RefKind = "skill" | "project" | "model" | "agent" | "flow";
+export type RefKind = "skill" | "project" | "adapter" | "agent" | "flow";
 
 /**
  * List the entities that reference the given one. A non-empty result means
@@ -13,9 +13,9 @@ export function referencesTo(db: Database, kind: RefKind, id: number): Ref[] {
       return agentsVia(db, "agent_skills", "skill_id", id);
     case "project":
       return agentsVia(db, "agent_projects", "project_id", id);
-    case "model":
+    case "adapter":
       return db
-        .query("SELECT name FROM agents WHERE model_id = ?")
+        .query("SELECT name FROM agents WHERE adapter_id = ?")
         .all(id)
         .map((r: any) => ({ kind: "agent", name: r.name }));
     case "agent":

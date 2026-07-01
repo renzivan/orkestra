@@ -22,17 +22,19 @@ async function sleep(ms: number) {
 test("create + run a single-agent task reaches succeeded", async () => {
   const { db } = await import("../lib/db");
   const A = await import("../app/actions");
-  const Models = await import("../lib/repos/models");
+  const Adapters = await import("../lib/repos/adapters");
   const Runs = await import("../lib/repos/runs");
 
-  const m = Models.createModel(db(), {
+  const ad = Adapters.createAdapter(db(), {
     name: "echo",
     command: "bash test/fixtures/echo-model.sh",
   });
   const agent = await A.saveAgent({
     name: "solo",
     base_instruction: "b",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [],
     project_ids: [],
   });
@@ -57,14 +59,16 @@ test("create + run a single-agent task reaches succeeded", async () => {
 test("deleting a referenced skill returns an error object", async () => {
   const { db } = await import("../lib/db");
   const A = await import("../app/actions");
-  const Models = await import("../lib/repos/models");
+  const Adapters = await import("../lib/repos/adapters");
 
-  const m = Models.createModel(db(), { name: "echo", command: "c {input}" });
+  const ad = Adapters.createAdapter(db(), { name: "echo", command: "c {input}" });
   const skill = await A.saveSkill({ name: "plan", body: "plan" });
   await A.saveAgent({
     name: "a",
     base_instruction: "b",
-    model_id: m.id,
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
     skill_ids: [skill.id],
     project_ids: [],
   });

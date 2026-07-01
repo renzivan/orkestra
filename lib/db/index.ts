@@ -15,10 +15,20 @@ export function openDb(path?: string): Database {
   const db = new Database(file);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
-  for (const stmt of MIGRATIONS) db.exec(stmt);
+  runMigrations(db);
   // A previous process may have died mid-run — clear any stuck 'running' rows.
   reconcileStaleRuns(db);
   return db;
+}
+
+function runMigrations(db: Database): void {
+  const row = db.query("PRAGMA user_version").get() as { user_version: number };
+  const current = row.user_version;
+  for (let v = current; v < MIGRATIONS.length; v++) {
+    for (const stmt of MIGRATIONS[v]) db.exec(stmt);
+  }
+  // PRAGMA doesn't accept bound params; version is an internal integer.
+  db.exec(`PRAGMA user_version = ${MIGRATIONS.length}`);
 }
 
 function defaultDbPath(): string {
