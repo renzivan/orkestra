@@ -1,3 +1,9 @@
+## conventions
+
+Before writing or changing any code, read `docs/CONVENTIONS.md` and follow it.
+It is the code style and architecture guide for this project — layering rules, the repo pattern, result unions, comment style, testing, and formatting.
+This is mandatory for every change, not optional guidance.
+
 ## git
 
 Do not create a new branch for each feature.
