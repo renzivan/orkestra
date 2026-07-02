@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Task } from "@/lib/types";
 import { deleteTaskAction } from "../../actions";
+import { taskDeleteMessage } from "@/lib/repos/tasks";
 import { useConfirm } from "../../confirm-dialog";
 
 export function DeleteTaskButton({ task, label }: { task: Task; label: string }) {
@@ -13,10 +14,7 @@ export function DeleteTaskButton({ task, label }: { task: Task; label: string })
   const [error, setError] = useState("");
 
   async function remove() {
-    const running = task.status === "running";
-    const message = running
-      ? `Delete "${label}"?\n\nThis task is running and will be stopped.\n\nThis can't be undone.`
-      : `Delete "${label}"? This can't be undone.`;
+    const message = taskDeleteMessage(label, task.status === "running");
     if (!(await confirm({ title: "Delete task", message }))) return;
     setError("");
     setBusy(true);
