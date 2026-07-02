@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getTask, taskLabel } from "@/lib/repos/tasks";
 import { latestRunForTask, getRunWithSteps } from "@/lib/repos/runs";
 import { getSettings } from "@/lib/repos/settings";
+import { taskRunnable } from "@/lib/runnable";
 import { RunView } from "./run-view";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function TaskDetailPage({
   const latest = latestRunForTask(database, task.id);
   const run = latest ? getRunWithSteps(database, latest.id) : null;
   const prefix = getSettings(database).task_prefix;
+  const runnable = taskRunnable(database, task);
 
   return (
     <>
@@ -36,7 +38,7 @@ export default async function TaskDetailPage({
         <span className={`badge ${task.status}`}>{task.status}</span>
       </div>
 
-      <RunView task={task} initialRun={run} />
+      <RunView task={task} initialRun={run} runnable={runnable} />
     </>
   );
 }

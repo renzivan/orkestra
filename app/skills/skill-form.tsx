@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Skill } from "@/lib/types";
 import { saveSkill, deleteSkillAction } from "../actions";
+import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
 
 export function SkillForm({ skill }: { skill: Skill | null }) {
@@ -30,13 +31,8 @@ export function SkillForm({ skill }: { skill: Skill | null }) {
 
   async function remove() {
     if (!skill) return;
-    if (
-      !(await confirm({
-        title: "Delete skill",
-        message: `Delete "${skill.name}"? This can't be undone.`,
-      }))
-    )
-      return;
+    const message = await deleteConfirmMessage("skill", skill.id, skill.name);
+    if (!(await confirm({ title: "Delete skill", message }))) return;
     setError("");
     const res = await deleteSkillAction(skill.id);
     if (!res.ok) return setError(res.error);

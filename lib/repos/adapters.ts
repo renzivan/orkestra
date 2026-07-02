@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
 import type { Adapter } from "../types";
-import { assertNotReferenced } from "../refs";
 
 export interface AdapterInput {
   name: string;
@@ -47,7 +46,8 @@ export function updateAdapter(
   return row;
 }
 
+/** Delete an adapter; agents using it get adapter_id = NULL and become
+ *  non-runnable until reassigned (FK set-null). */
 export function deleteAdapter(db: Database, id: number): void {
-  assertNotReferenced(db, "adapter", id);
   db.query("DELETE FROM adapters WHERE id = ?").run(id);
 }

@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
 import type { Agent, Project, Skill } from "../types";
-import { assertNotReferenced } from "../refs";
 
 export interface AgentInput {
   name: string;
@@ -18,7 +17,7 @@ interface AgentRow {
   id: number;
   name: string;
   base_instruction: string;
-  adapter_id: number;
+  adapter_id: number | null;
   model: string;
   effort: string;
   skip_permissions: number; // SQLite 0/1
@@ -129,7 +128,8 @@ export function getAgent(db: Database, id: number): Agent | null {
   return { ...row, skip_permissions: row.skip_permissions === 1, skills, projects };
 }
 
+/** Delete an agent; its flow steps are dropped (flow shrinks) and tasks that
+ *  target it become non-runnable (FK cascade + runtime check). */
 export function deleteAgent(db: Database, id: number): void {
-  assertNotReferenced(db, "agent", id);
   db.query("DELETE FROM agents WHERE id = ?").run(id);
 }

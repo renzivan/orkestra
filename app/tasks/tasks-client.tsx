@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Task, TargetType } from "@/lib/types";
+import type { Runnable } from "@/lib/runnable";
 import { taskLabel } from "@/lib/repos/tasks";
 import { createTaskAction, runTaskAction } from "../actions";
 
@@ -17,11 +18,13 @@ export function TasksClient({
   flows,
   agents,
   prefix,
+  runnable,
 }: {
   tasks: Task[];
   flows: Named[];
   agents: Named[];
   prefix: string;
+  runnable: Record<number, Runnable>;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -177,13 +180,20 @@ export function TasksClient({
                   </td>
                   <td>
                     <div className="row" style={{ gap: 8 }}>
-                      <button
-                        className="btn small primary"
-                        onClick={() => run(t)}
-                        disabled={t.status === "running"}
-                      >
-                        {t.status === "running" ? "Running…" : "Run"}
-                      </button>
+                      {(() => {
+                        const r = runnable[t.id];
+                        const blocked = r != null && !r.ok;
+                        return (
+                          <button
+                            className="btn small primary"
+                            onClick={() => run(t)}
+                            disabled={t.status === "running" || blocked}
+                            title={blocked ? r.reason : undefined}
+                          >
+                            {t.status === "running" ? "Running…" : "Run"}
+                          </button>
+                        );
+                      })()}
                       <Link className="btn small" href={`/tasks/${t.id}`}>
                         View
                       </Link>

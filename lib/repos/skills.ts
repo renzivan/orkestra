@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
 import type { Skill } from "../types";
-import { assertNotReferenced } from "../refs";
 
 export interface SkillInput {
   name: string;
@@ -42,7 +41,7 @@ export function updateSkill(db: Database, id: number, input: SkillInput): Skill 
   return row;
 }
 
+/** Delete a skill; it is dropped from any agent that used it (FK cascade). */
 export function deleteSkill(db: Database, id: number): void {
-  assertNotReferenced(db, "skill", id);
   db.query("DELETE FROM skills WHERE id = ?").run(id);
 }

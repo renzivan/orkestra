@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Task } from "@/lib/types";
+import type { Runnable } from "@/lib/runnable";
 import type { RunWithSteps } from "@/lib/repos/runs";
 import type { TranscriptEntry } from "@/lib/engine/transcript";
 import {
@@ -56,9 +57,11 @@ function seedSteps(run: RunWithSteps | null): Record<number, StepView> {
 export function RunView({
   task,
   initialRun,
+  runnable,
 }: {
   task: Task;
   initialRun: RunWithSteps | null;
+  runnable: Runnable;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -196,14 +199,24 @@ export function RunView({
   const multiAgent =
     new Set(stepList.map((s) => s.agent_name)).size > 1;
 
+  // A deleted target (agent/flow) or a missing adapter makes the task
+  // non-runnable — disable the run controls and say why, rather than letting a
+  // click fail mid-run. Stop is never gated (it acts on the live process).
+  const blocked = !runnable.ok;
+
   return (
     <div className="card chat">
       <div className="row spread chat-head">
-        <div>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
           {runStatus ? (
             <span className={`badge ${runStatus}`}>{runStatus}</span>
           ) : (
             <span className="muted">not run yet</span>
+          )}
+          {blocked && !streaming && (
+            <span className="muted mono" style={{ fontSize: 12 }}>
+              can’t run: {runnable.reason}
+            </span>
           )}
         </div>
         {streaming ? (
@@ -212,15 +225,30 @@ export function RunView({
           </button>
         ) : runStatus === "stopped" ? (
           <div className="row">
-            <button className="btn" onClick={run} disabled={busy}>
+            <button
+              className="btn"
+              onClick={run}
+              disabled={busy || blocked}
+              title={blocked ? runnable.reason : undefined}
+            >
               Re-run
             </button>
-            <button className="btn primary" onClick={resume} disabled={busy}>
+            <button
+              className="btn primary"
+              onClick={resume}
+              disabled={busy || blocked}
+              title={blocked ? runnable.reason : undefined}
+            >
               Resume
             </button>
           </div>
         ) : (
-          <button className="btn primary" onClick={run} disabled={busy}>
+          <button
+            className="btn primary"
+            onClick={run}
+            disabled={busy || blocked}
+            title={blocked ? runnable.reason : undefined}
+          >
             {runStatus ? "Re-run" : "Run"}
           </button>
         )}

@@ -26,7 +26,8 @@ export interface Agent {
   id: number;
   name: string;
   base_instruction: string;
-  adapter_id: number;
+  /** null when the adapter was deleted — agent is non-runnable until reassigned. */
+  adapter_id: number | null;
   model: string;
   effort: string; // "" means off (no --effort flag)
   skip_permissions: boolean; // headless runs: skip approval prompts so it can act

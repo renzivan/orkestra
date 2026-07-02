@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
+import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
 
 export interface AdapterChoice {
@@ -108,13 +109,8 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
 
   async function remove() {
     if (!agent) return;
-    if (
-      !(await confirm({
-        title: "Delete agent",
-        message: `Delete "${agent.name}"? This can't be undone.`,
-      }))
-    )
-      return;
+    const message = await deleteConfirmMessage("agent", agent.id, agent.name);
+    if (!(await confirm({ title: "Delete agent", message }))) return;
     setError("");
     const res = await deleteAgentAction(agent.id);
     if (!res.ok) return setError(res.error);

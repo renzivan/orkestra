@@ -10,7 +10,9 @@ import * as Tasks from "@/lib/repos/tasks";
 import * as Settings from "@/lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
 import { stop } from "@/lib/engine/registry";
-import type { Settings as SettingsT, TargetType } from "@/lib/types";
+import { referencesTo, type RefKind } from "@/lib/refs";
+import { taskRunnable } from "@/lib/runnable";
+import type { Ref, Settings as SettingsT, TargetType } from "@/lib/types";
 
 export type DeleteResult = { ok: true } | { ok: false; error: string };
 
@@ -30,6 +32,15 @@ function tryDelete(fn: () => void, path: string): DeleteResult {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** What still points at this entity — shown in the delete-confirmation dialog so
+ *  the user sees the impact before deleting (delete itself is never blocked). */
+export async function referencesToAction(
+  kind: RefKind,
+  id: number,
+): Promise<Ref[]> {
+  return referencesTo(db(), kind, id);
 }
 
 /** Translate raw SQLite unique-constraint errors into a friendly message. */
@@ -167,7 +178,16 @@ export async function createTaskAction(input: {
   return task;
 }
 
-export async function runTaskAction(taskId: number): Promise<{ ok: true }> {
+export async function runTaskAction(
+  taskId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const task = Tasks.getTask(db(), taskId);
+  if (!task) return { ok: false, error: "task not found" };
+  // Defense against a stale client: the Run button is disabled when a task is
+  // non-runnable, but re-check here so a deleted target never starts a run.
+  const runnable = taskRunnable(db(), task);
+  if (!runnable.ok) return { ok: false, error: runnable.reason! };
+
   Tasks.setTaskStatus(db(), taskId, "running");
   revalidate("/tasks");
   // Fire and forget — many tasks may run concurrently.

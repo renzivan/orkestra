@@ -55,7 +55,7 @@ export function useConfirm() {
     >
       <div className="dialog" role="alertdialog" aria-modal="true">
         <h3 style={{ margin: 0 }}>{pending.title}</h3>
-        <p className="muted" style={{ margin: 0 }}>
+        <p className="muted" style={{ margin: 0, whiteSpace: "pre-line" }}>
           {pending.message}
         </p>
         <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>

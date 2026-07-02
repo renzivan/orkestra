@@ -197,4 +197,73 @@ export const MIGRATIONS: string[][] = [
   // as "<prefix>-<id>: <title>". Empty by default, so tasks show just their
   // title until a prefix is set on the settings page.
   [`ALTER TABLE settings ADD COLUMN task_prefix TEXT NOT NULL DEFAULT ''`],
+
+  // v8 — deletion degrades downstream instead of being blocked. Previously a
+  // referenced skill/project/adapter/agent could not be deleted (both an app
+  // guard and these NO-ACTION foreign keys refused). Now:
+  //   - deleting a skill/project drops it from every agent that used it
+  //   - deleting an adapter nulls it out on agents (they become non-runnable
+  //     until reassigned), rather than being refused
+  //   - deleting an agent drops the flow steps that referenced it
+  // SQLite can't alter a foreign key or a column's nullability in place, so the
+  // affected tables are rebuilt (create-new → copy → drop → rename) with FK
+  // enforcement off for the swap, exactly like v6. Column order on each _new
+  // table matches the live table so `INSERT ... SELECT *` lines up (agents keeps
+  // its v2/v5 trailing columns: model, effort, skip_permissions).
+  [
+    `PRAGMA foreign_keys=OFF`,
+
+    // agents.adapter_id: nullable + ON DELETE SET NULL.
+    `CREATE TABLE agents_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      base_instruction TEXT NOT NULL DEFAULT '',
+      adapter_id INTEGER REFERENCES adapters(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT 'sonnet',
+      effort TEXT NOT NULL DEFAULT '',
+      skip_permissions INTEGER NOT NULL DEFAULT 1,
+      UNIQUE(name)
+    )`,
+    `INSERT INTO agents_new SELECT * FROM agents`,
+    `DROP TABLE agents`,
+    `ALTER TABLE agents_new RENAME TO agents`,
+
+    // agent_skills.skill_id: ON DELETE CASCADE (agent_id already cascades).
+    `CREATE TABLE agent_skills_new (
+      agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      PRIMARY KEY (agent_id, skill_id)
+    )`,
+    `INSERT INTO agent_skills_new SELECT * FROM agent_skills`,
+    `DROP TABLE agent_skills`,
+    `ALTER TABLE agent_skills_new RENAME TO agent_skills`,
+
+    // agent_projects.project_id: ON DELETE CASCADE (agent_id already cascades).
+    `CREATE TABLE agent_projects_new (
+      agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      PRIMARY KEY (agent_id, project_id)
+    )`,
+    `INSERT INTO agent_projects_new SELECT * FROM agent_projects`,
+    `DROP TABLE agent_projects`,
+    `ALTER TABLE agent_projects_new RENAME TO agent_projects`,
+
+    // flow_steps.agent_id: ON DELETE CASCADE (flow_id already cascades). A
+    // deleted agent drops its steps; remaining steps keep their positions
+    // (gaps are fine — steps are read ordered by position, not by index).
+    `CREATE TABLE flow_steps_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flow_id INTEGER NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+      agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL
+    )`,
+    `INSERT INTO flow_steps_new SELECT * FROM flow_steps`,
+    `DROP TABLE flow_steps`,
+    `ALTER TABLE flow_steps_new RENAME TO flow_steps`,
+
+    `PRAGMA foreign_keys=ON`,
+  ],
 ];

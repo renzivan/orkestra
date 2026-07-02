@@ -91,7 +91,8 @@ async function runFrom(
       if (isAborted(runId)) return stopRun(db, runId, task.id);
 
       const agent = agents[pos];
-      const adapter = getAdapter(db, agent.adapter_id);
+      const adapter =
+        agent.adapter_id == null ? null : getAdapter(db, agent.adapter_id);
       if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
 
       const step = await executeStep(db, runId, pos, agent, adapter, settings, {
@@ -134,7 +135,8 @@ export async function replyToRun(
   if (!last?.session_id) throw new Error(`run ${runId} is not resumable`);
   const agent = getAgent(db, last.agent_id);
   if (!agent) throw new Error(`agent ${last.agent_id} not found`);
-  const adapter = getAdapter(db, agent.adapter_id);
+  const adapter =
+    agent.adapter_id == null ? null : getAdapter(db, agent.adapter_id);
   if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
   const settings = getSettings(db);
 

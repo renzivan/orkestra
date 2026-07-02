@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Agent, Flow } from "@/lib/types";
 import { saveFlow, deleteFlowAction } from "../actions";
+import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
 
 interface Props {
@@ -53,13 +54,8 @@ export function FlowForm({ flow, agents }: Props) {
 
   async function remove() {
     if (!flow) return;
-    if (
-      !(await confirm({
-        title: "Delete flow",
-        message: `Delete "${flow.name}"? This can't be undone.`,
-      }))
-    )
-      return;
+    const message = await deleteConfirmMessage("flow", flow.id, flow.name);
+    if (!(await confirm({ title: "Delete flow", message }))) return;
     setError("");
     const res = await deleteFlowAction(flow.id);
     if (!res.ok) return setError(res.error);

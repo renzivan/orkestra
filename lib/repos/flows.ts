@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Flow } from "../types";
 import { getAgent } from "./agents";
-import { assertNotReferenced } from "../refs";
 
 export interface FlowInput {
   name: string;
@@ -72,7 +71,8 @@ export function getFlow(db: Database, id: number): Flow | null {
   return { ...row, agents };
 }
 
+/** Delete a flow; its steps are removed and tasks that target it become
+ *  non-runnable (FK cascade + runtime check). */
 export function deleteFlow(db: Database, id: number): void {
-  assertNotReferenced(db, "flow", id);
   db.query("DELETE FROM flows WHERE id = ?").run(id);
 }

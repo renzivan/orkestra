@@ -7,8 +7,7 @@ import * as Agents from "../lib/repos/agents";
 import * as Flows from "../lib/repos/flows";
 import { referencesTo } from "../lib/refs";
 
-test("referencesTo finds users of each entity, and deletes are blocked", () => {
-  const db = openDb(":memory:");
+function fixtures(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
   const s = Skills.createSkill(db, { name: "plan", body: "plan" });
   const p = Projects.createProject(db, { name: "app", path: "/app" });
@@ -22,19 +21,63 @@ test("referencesTo finds users of each entity, and deletes are blocked", () => {
     project_ids: [p.id],
   });
   const f = Flows.createFlow(db, { name: "flow", agent_ids: [a.id] });
+  return { ad, s, p, a, f };
+}
 
+test("referencesTo reports the users of each entity", () => {
+  const db = openDb(":memory:");
+  const { ad, s, p, a } = fixtures(db);
   expect(referencesTo(db, "skill", s.id)[0].kind).toBe("agent");
   expect(referencesTo(db, "project", p.id)[0].kind).toBe("agent");
   expect(referencesTo(db, "adapter", ad.id)[0].kind).toBe("agent");
   expect(referencesTo(db, "agent", a.id)[0].kind).toBe("flow");
-
-  expect(() => Skills.deleteSkill(db, s.id)).toThrow(/referenced/i);
-  expect(() => Projects.deleteProject(db, p.id)).toThrow(/referenced/i);
-  expect(() => Adapters.deleteAdapter(db, ad.id)).toThrow(/referenced/i);
-  expect(() => Agents.deleteAgent(db, a.id)).toThrow(/referenced/i);
-
-  // Unreferenced flow can be deleted; then the agent is free.
-  Flows.deleteFlow(db, f.id);
-  expect(referencesTo(db, "agent", a.id).length).toBe(0);
-  expect(() => Agents.deleteAgent(db, a.id)).not.toThrow();
 });
+
+test("deleting a referenced skill/project drops it from the agent", () => {
+  const db = openDb(":memory:");
+  const { s, p, a } = fixtures(db);
+
+  Skills.deleteSkill(db, s.id);
+  Projects.deleteProject(db, p.id);
+
+  const agent = Agents.getAgent(db, a.id)!;
+  expect(agent.skills.length).toBe(0);
+  expect(agent.projects.length).toBe(0);
+});
+
+test("deleting an adapter nulls it out on agents (kept, non-runnable)", () => {
+  const db = openDb(":memory:");
+  const { ad, a } = fixtures(db);
+
+  Adapters.deleteAdapter(db, ad.id);
+
+  const agent = Agents.getAgent(db, a.id)!;
+  expect(agent).not.toBeNull();
+  expect(agent.adapter_id).toBeNull();
+});
+
+test("deleting an agent drops its flow steps; the flow shrinks", () => {
+  const db = openDb(":memory:");
+  const { a, f } = fixtures(db);
+  const b = Agents.createAgent(db, {
+    name: "second",
+    base_instruction: "b",
+    adapter_id: fixturesAdapterId(db),
+    model: "opus",
+    effort: "off",
+    skill_ids: [],
+    project_ids: [],
+  });
+  Flows.updateFlow(db, f.id, { name: "flow", agent_ids: [a.id, b.id] });
+
+  Agents.deleteAgent(db, a.id);
+
+  const flow = Flows.getFlow(db, f.id)!;
+  expect(flow).not.toBeNull();
+  expect(flow.agents.map((x) => x.id)).toEqual([b.id]);
+});
+
+// The single adapter created by fixtures — reused to build a second agent.
+function fixturesAdapterId(db: ReturnType<typeof openDb>): number {
+  return (Adapters.listAdapters(db)[0] as { id: number }).id;
+}

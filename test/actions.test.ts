@@ -56,14 +56,15 @@ test("create + run a single-agent task reaches succeeded", async () => {
   expect(run?.status).toBe("succeeded");
 });
 
-test("deleting a referenced skill returns an error object", async () => {
+test("deleting a referenced skill succeeds and drops it from the agent", async () => {
   const { db } = await import("../lib/db");
   const A = await import("../app/actions");
   const Adapters = await import("../lib/repos/adapters");
+  const Agents = await import("../lib/repos/agents");
 
   const ad = Adapters.createAdapter(db(), { name: "echo", command: "c {input}" });
   const skill = await A.saveSkill({ name: "plan", body: "plan" });
-  await A.saveAgent({
+  const agent = await A.saveAgent({
     name: "a",
     base_instruction: "b",
     adapter_id: ad.id,
@@ -74,6 +75,35 @@ test("deleting a referenced skill returns an error object", async () => {
   });
 
   const res = await A.deleteSkillAction(skill.id);
+  expect(res.ok).toBe(true);
+  expect(Agents.getAgent(db(), agent.id)!.skills.length).toBe(0);
+});
+
+test("runTaskAction refuses a task whose target agent was deleted", async () => {
+  const { db } = await import("../lib/db");
+  const A = await import("../app/actions");
+  const Adapters = await import("../lib/repos/adapters");
+  const Agents = await import("../lib/repos/agents");
+
+  const ad = Adapters.createAdapter(db(), { name: "echo", command: "c {input}" });
+  const agent = await A.saveAgent({
+    name: "a",
+    base_instruction: "b",
+    adapter_id: ad.id,
+    model: "opus",
+    effort: "off",
+    skill_ids: [],
+    project_ids: [],
+  });
+  const task = await A.createTaskAction({
+    title: "t",
+    body: "",
+    target_type: "agent",
+    target_id: agent.id,
+  });
+  Agents.deleteAgent(db(), agent.id);
+
+  const res = await A.runTaskAction(task.id);
   expect(res.ok).toBe(false);
-  if (!res.ok) expect(res.error).toMatch(/referenced/i);
+  if (!res.ok) expect(res.error).toMatch(/deleted/);
 });

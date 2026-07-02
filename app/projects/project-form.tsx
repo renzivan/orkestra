@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/types";
 import { saveProject, deleteProjectAction, pickDirectory } from "../actions";
+import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
 
 export function ProjectForm({ project }: { project: Project | null }) {
@@ -51,13 +52,12 @@ export function ProjectForm({ project }: { project: Project | null }) {
 
   async function remove() {
     if (!project) return;
-    if (
-      !(await confirm({
-        title: "Delete project",
-        message: `Delete "${project.name}"? This can't be undone.`,
-      }))
-    )
-      return;
+    const message = await deleteConfirmMessage(
+      "project",
+      project.id,
+      project.name,
+    );
+    if (!(await confirm({ title: "Delete project", message }))) return;
     setError("");
     const res = await deleteProjectAction(project.id);
     if (!res.ok) return setError(res.error);
