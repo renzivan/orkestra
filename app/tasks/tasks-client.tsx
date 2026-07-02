@@ -27,12 +27,15 @@ export function TasksClient({
   tasks,
   flows,
   agents,
+  defaultAgentId,
   prefix,
   runnable,
 }: {
   tasks: Task[];
   flows: Named[];
   agents: Named[];
+  /** Preselected target when creating a task — the built-in Default agent. */
+  defaultAgentId: number;
   prefix: string;
   runnable: Record<number, Runnable>;
 }) {
@@ -140,6 +143,7 @@ export function TasksClient({
         <NewTaskModal
           flows={flows}
           agents={agents}
+          defaultAgentId={defaultAgentId}
           onClose={() => setModalOpen(false)}
           onCreated={() => {
             setModalOpen(false);
@@ -261,18 +265,21 @@ function TaskCard({
 function NewTaskModal({
   flows,
   agents,
+  defaultAgentId,
   onClose,
   onCreated,
 }: {
   flows: Named[];
   agents: Named[];
+  defaultAgentId: number;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [targetType, setTargetType] = useState<TargetType>("flow");
-  const [targetId, setTargetId] = useState<number | null>(null);
+  // Preselect the Default agent so a task can be created with no target fiddling.
+  const [targetType, setTargetType] = useState<TargetType>("agent");
+  const [targetId, setTargetId] = useState<number | null>(defaultAgentId);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 

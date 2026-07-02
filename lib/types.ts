@@ -31,6 +31,10 @@ export interface Agent {
   model: string;
   effort: string; // "" means off (no --effort flag)
   skip_permissions: boolean; // headless runs: skip approval prompts so it can act
+  /** The built-in Default agent: undeletable, name-locked, scoped to all
+   *  projects, preselected on new tasks, and the reassign target when another
+   *  agent is deleted. Exactly one row has this set. */
+  is_default: boolean;
   skills: Skill[];
   projects: Project[];
   created_at: string;

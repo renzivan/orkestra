@@ -25,6 +25,9 @@ interface Props {
 export function AgentForm({ agent, adapters, skills, projects }: Props) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
+  // The built-in Default agent: its name is locked, it can't be deleted, and it
+  // is scoped to all projects (no per-project picker).
+  const isDefault = agent?.is_default ?? false;
   const [name, setName] = useState(agent?.name ?? "");
   const [base, setBase] = useState(agent?.base_instruction ?? "");
   const [adapterId, setAdapterId] = useState<number | null>(
@@ -132,7 +135,7 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
             adapter.
           </p>
         </div>
-        {agent && (
+        {agent && !isDefault && (
           <button className="btn small danger" onClick={remove} disabled={busy}>
             Delete
           </button>
@@ -156,8 +159,15 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
               type="text"
               value={name}
               placeholder="planner"
+              disabled={isDefault}
               onChange={(e) => setName(e.target.value)}
             />
+            {isDefault && (
+              <div className="muted" style={{ fontSize: 13 }}>
+                The Default agent’s name is fixed. It can’t be deleted and is
+                preselected when you create a task.
+              </div>
+            )}
           </div>
           <div>
             <label>Base instruction (its core behavior)</label>
@@ -289,7 +299,12 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
 
           <div>
             <label>Projects</label>
-            {projects.length === 0 ? (
+            {isDefault ? (
+              <div className="muted" style={{ fontSize: 13 }}>
+                All projects. The Default agent is scoped to every project
+                automatically, including ones you add later.
+              </div>
+            ) : projects.length === 0 ? (
               <div className="muted" style={{ fontSize: 13 }}>
                 No projects defined.
               </div>

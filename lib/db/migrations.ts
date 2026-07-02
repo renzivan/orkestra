@@ -266,4 +266,21 @@ export const MIGRATIONS: string[][] = [
 
     `PRAGMA foreign_keys=ON`,
   ],
+
+  // v9 — a built-in Default agent. It always exists, can't be deleted, is
+  // preselected when creating a task, and absorbs orphaned tasks: deleting a
+  // normal agent reassigns any task that targeted it to this one instead of
+  // leaving it non-runnable. Seeded with an empty instruction and no adapter,
+  // so it's configured (adapter/model) before it can run. The partial unique
+  // index guarantees at most one default. `is_default` is appended (ADD COLUMN,
+  // not a rebuild), so getAgent's `SELECT *` mapping stays order-independent.
+  [
+    `ALTER TABLE agents ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0`,
+    `CREATE UNIQUE INDEX agents_one_default ON agents(is_default) WHERE is_default = 1`,
+    `INSERT INTO agents
+       (name, base_instruction, adapter_id, model, effort, skip_permissions, is_default, created_at, updated_at)
+     VALUES
+       ('Default', '', NULL, '', '', 1, 1,
+        strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+  ],
 ];

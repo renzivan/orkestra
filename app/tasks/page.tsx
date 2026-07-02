@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { listTasks } from "@/lib/repos/tasks";
 import { listFlows } from "@/lib/repos/flows";
-import { listAgents } from "@/lib/repos/agents";
+import { listAgents, getDefaultAgent } from "@/lib/repos/agents";
 import { getSettings } from "@/lib/repos/settings";
 import { taskRunnable, type Runnable } from "@/lib/runnable";
 import { TasksClient } from "./tasks-client";
@@ -12,6 +12,7 @@ export default function TasksPage() {
   const database = db();
   const flows = listFlows(database).map((f) => ({ id: f.id, name: f.name }));
   const agents = listAgents(database).map((a) => ({ id: a.id, name: a.name }));
+  const defaultAgentId = getDefaultAgent(database).id;
   const prefix = getSettings(database).task_prefix;
   const tasks = listTasks(database);
   const runnable: Record<number, Runnable> = {};
@@ -21,6 +22,7 @@ export default function TasksPage() {
       tasks={tasks}
       flows={flows}
       agents={agents}
+      defaultAgentId={defaultAgentId}
       prefix={prefix}
       runnable={runnable}
     />

@@ -21,6 +21,7 @@ interface AgentRow {
   model: string;
   effort: string;
   skip_permissions: number; // SQLite 0/1
+  is_default: number; // SQLite 0/1
   created_at: string;
   updated_at: string;
 }
@@ -30,8 +31,8 @@ export function createAgent(db: Database, input: AgentInput): Agent {
   const insert = db.transaction((i: AgentInput) => {
     const row = db
       .query(
-        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, skip_permissions, created_at, updated_at)
-         VALUES ($name, $base, $adapter, $model, $effort, $skip, $now, $now) RETURNING id`,
+        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, skip_permissions, is_default, created_at, updated_at)
+         VALUES ($name, $base, $adapter, $model, $effort, $skip, 0, $now, $now) RETURNING id`,
       )
       .get({
         $name: i.name,
@@ -55,6 +56,9 @@ export function updateAgent(
   input: AgentInput,
 ): Agent {
   const now = new Date().toISOString();
+  // The Default agent's name is locked and its projects are always "all", so
+  // ignore any name/project_ids a (possibly stale) caller sends for it.
+  const isDefault = isDefaultAgent(db, id);
   const tx = db.transaction((i: AgentInput) => {
     const res = db
       .query(
@@ -64,7 +68,7 @@ export function updateAgent(
       )
       .run({
         $id: id,
-        $name: i.name,
+        $name: isDefault ? "Default" : i.name,
         $base: i.base_instruction,
         $adapter: i.adapter_id,
         $model: i.model,
@@ -75,7 +79,7 @@ export function updateAgent(
     if (res.changes === 0) throw new Error(`agent ${id} not found`);
     db.query("DELETE FROM agent_skills WHERE agent_id = ?").run(id);
     db.query("DELETE FROM agent_projects WHERE agent_id = ?").run(id);
-    writeRelations(db, id, i);
+    writeRelations(db, id, isDefault ? { ...i, project_ids: [] } : i);
   });
   tx(input);
   return getAgent(db, id)!;
@@ -117,19 +121,63 @@ export function getAgent(db: Database, id: number): Agent | null {
     )
     .all(id) as Skill[];
 
-  const projects = db
-    .query(
-      `SELECT p.* FROM projects p
-       JOIN agent_projects a ON a.project_id = p.id
-       WHERE a.agent_id = ? ORDER BY p.name COLLATE NOCASE`,
-    )
-    .all(id) as Project[];
+  // The Default agent is scoped to every project, resolved live so projects
+  // added after it was seeded are included automatically (its agent_projects
+  // rows are never written). Others use their explicit project list.
+  const projects =
+    row.is_default === 1
+      ? (db
+          .query("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
+          .all() as Project[])
+      : (db
+          .query(
+            `SELECT p.* FROM projects p
+             JOIN agent_projects a ON a.project_id = p.id
+             WHERE a.agent_id = ? ORDER BY p.name COLLATE NOCASE`,
+          )
+          .all(id) as Project[]);
 
-  return { ...row, skip_permissions: row.skip_permissions === 1, skills, projects };
+  return {
+    ...row,
+    skip_permissions: row.skip_permissions === 1,
+    is_default: row.is_default === 1,
+    skills,
+    projects,
+  };
 }
 
-/** Delete an agent; its flow steps are dropped (flow shrinks) and tasks that
- *  target it become non-runnable (FK cascade + runtime check). */
+/** The built-in Default agent (always present — seeded by migration v9). */
+export function getDefaultAgent(db: Database): Agent {
+  const row = db
+    .query("SELECT id FROM agents WHERE is_default = 1")
+    .get() as { id: number } | null;
+  if (!row) throw new Error("default agent missing");
+  return getAgent(db, row.id)!;
+}
+
+function isDefaultAgent(db: Database, id: number): boolean {
+  const row = db
+    .query("SELECT is_default FROM agents WHERE id = ?")
+    .get(id) as { is_default: number } | null;
+  return row?.is_default === 1;
+}
+
+/** Delete an agent. The built-in Default agent can't be deleted. Otherwise, in
+ *  one transaction: tasks that targeted this agent are reassigned to the Default
+ *  agent (so they stay runnable), then the agent is removed (its flow steps drop
+ *  via FK cascade). */
 export function deleteAgent(db: Database, id: number): void {
-  db.query("DELETE FROM agents WHERE id = ?").run(id);
+  if (isDefaultAgent(db, id)) {
+    throw new Error("The default agent can't be deleted.");
+  }
+  const now = new Date().toISOString();
+  const defaultId = getDefaultAgent(db).id;
+  const tx = db.transaction(() => {
+    db.query(
+      `UPDATE tasks SET target_id = $default, updated_at = $now
+       WHERE target_type = 'agent' AND target_id = $id`,
+    ).run({ $default: defaultId, $now: now, $id: id });
+    db.query("DELETE FROM agents WHERE id = ?").run(id);
+  });
+  tx();
 }

@@ -79,11 +79,12 @@ test("deleting a referenced skill succeeds and drops it from the agent", async (
   expect(Agents.getAgent(db(), agent.id)!.skills.length).toBe(0);
 });
 
-test("runTaskAction refuses a task whose target agent was deleted", async () => {
+test("deleting a target agent reassigns its task to the Default agent", async () => {
   const { db } = await import("../lib/db");
   const A = await import("../app/actions");
   const Adapters = await import("../lib/repos/adapters");
   const Agents = await import("../lib/repos/agents");
+  const Tasks = await import("../lib/repos/tasks");
 
   const ad = Adapters.createAdapter(db(), { name: "echo", command: "c {input}" });
   const agent = await A.saveAgent({
@@ -103,9 +104,16 @@ test("runTaskAction refuses a task whose target agent was deleted", async () => 
   });
   Agents.deleteAgent(db(), agent.id);
 
+  // The task now points at the Default agent instead of a deleted one.
+  const def = Agents.getDefaultAgent(db());
+  const got = Tasks.getTask(db(), task.id)!;
+  expect(got.target_id).toBe(def.id);
+
+  // The seeded Default agent has no adapter yet, so the run is still refused —
+  // but for "no adapter", not "deleted".
   const res = await A.runTaskAction(task.id);
   expect(res.ok).toBe(false);
-  if (!res.ok) expect(res.error).toMatch(/deleted/);
+  if (!res.ok) expect(res.error).toMatch(/adapter/);
 });
 
 test("deleteTaskAction removes the task and its runs", async () => {

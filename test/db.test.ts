@@ -49,7 +49,7 @@ test("an existing v1 database migrates to the adapter schema", () => {
   // Simulate a pre-migration DB by forcing it back to v1 shape would be complex;
   // instead assert the migration runner brings a fresh DB to the latest version.
   const version = (db.query("PRAGMA user_version").get() as any).user_version;
-  expect(version).toBe(8);
+  expect(version).toBe(MIGRATIONS.length);
 });
 
 test("v8 sets delete-degrades foreign-key actions", () => {
@@ -106,9 +106,12 @@ test("v8 upgrades an existing v7 database, preserving rows", () => {
   seed.query(`INSERT INTO flow_steps (flow_id, agent_id, position) VALUES (1,1,0)`).run();
   seed.close();
 
-  // Reopen through the app path — this applies v8's table rebuild.
+  // Reopen through the app path — this applies v8's table rebuild (and every
+  // later migration, e.g. v9's Default agent seed).
   const db = openDb(file);
-  expect((db.query("PRAGMA user_version").get() as any).user_version).toBe(8);
+  expect((db.query("PRAGMA user_version").get() as any).user_version).toBe(
+    MIGRATIONS.length,
+  );
 
   const agent: any = db.query("SELECT * FROM agents WHERE id=1").get();
   expect(agent.name).toBe("a");
