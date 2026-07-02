@@ -373,8 +373,11 @@ function NewTaskModal({
               <select
                 value={targetType}
                 onChange={(e) => {
-                  setTargetType(e.target.value as TargetType);
-                  setTargetId(null);
+                  const next = e.target.value as TargetType;
+                  setTargetType(next);
+                  // Land on a valid option immediately — the Default agent for
+                  // agents, the first flow otherwise — so there's no empty state.
+                  setTargetId(next === "agent" ? defaultAgentId : flows[0]?.id ?? null);
                 }}
               >
                 <option value="flow">Flow</option>
@@ -387,7 +390,6 @@ function NewTaskModal({
                 value={targetId ?? ""}
                 onChange={(e) => setTargetId(Number(e.target.value) || null)}
               >
-                <option value="">Select a {targetType}…</option>
                 {options.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}
