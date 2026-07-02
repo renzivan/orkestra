@@ -48,3 +48,8 @@ export function listTasks(db: Database): Task[] {
 export function getTask(db: Database, id: number): Task | null {
   return (db.query("SELECT * FROM tasks WHERE id = ?").get(id) as Task) ?? null;
 }
+
+/** Delete a task; its runs and run_steps are removed by FK cascade. */
+export function deleteTask(db: Database, id: number): void {
+  db.query("DELETE FROM tasks WHERE id = ?").run(id);
+}
