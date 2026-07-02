@@ -7,6 +7,7 @@ import * as Projects from "@/lib/repos/projects";
 import * as Agents from "@/lib/repos/agents";
 import * as Flows from "@/lib/repos/flows";
 import * as Tasks from "@/lib/repos/tasks";
+import { latestRunForTask } from "@/lib/repos/runs";
 import * as Settings from "@/lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
 import { stop } from "@/lib/engine/registry";
@@ -176,6 +177,18 @@ export async function createTaskAction(input: {
   const task = Tasks.createTask(db(), input);
   revalidate("/tasks");
   return task;
+}
+
+export async function deleteTaskAction(id: number): Promise<DeleteResult> {
+  const task = Tasks.getTask(db(), id);
+  // A live run holds a subprocess — kill it before the row cascades away, or the
+  // process is orphaned. stop() is a safe no-op if the run isn't tracked; the
+  // runner's later terminal-write targets already-deleted rows (a no-op UPDATE).
+  if (task?.status === "running") {
+    const latest = latestRunForTask(db(), id);
+    if (latest) stop(latest.id);
+  }
+  return tryDelete(() => Tasks.deleteTask(db(), id), "/tasks");
 }
 
 export async function runTaskAction(

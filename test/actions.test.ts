@@ -107,3 +107,46 @@ test("runTaskAction refuses a task whose target agent was deleted", async () => 
   expect(res.ok).toBe(false);
   if (!res.ok) expect(res.error).toMatch(/deleted/);
 });
+
+test("deleteTaskAction removes the task and its runs", async () => {
+  const { db } = await import("../lib/db");
+  const A = await import("../app/actions");
+  const Tasks = await import("../lib/repos/tasks");
+  const Runs = await import("../lib/repos/runs");
+
+  const task = await A.createTaskAction({
+    title: "t",
+    body: "",
+    target_type: "agent",
+    target_id: 1,
+  });
+  Runs.startRun(db(), task.id);
+
+  const res = await A.deleteTaskAction(task.id);
+  expect(res.ok).toBe(true);
+  expect(Tasks.getTask(db(), task.id)).toBeNull();
+  expect(Runs.latestRunForTask(db(), task.id)).toBeNull();
+});
+
+test("deleteTaskAction stops the live run of a running task", async () => {
+  const { db } = await import("../lib/db");
+  const A = await import("../app/actions");
+  const Tasks = await import("../lib/repos/tasks");
+  const Runs = await import("../lib/repos/runs");
+  const Registry = await import("../lib/engine/registry");
+
+  const task = await A.createTaskAction({
+    title: "t",
+    body: "",
+    target_type: "agent",
+    target_id: 1,
+  });
+  const run = Runs.startRun(db(), task.id);
+  Tasks.setTaskStatus(db(), task.id, "running");
+  Registry.register(run.id); // simulate a live run tracked by the engine
+
+  const res = await A.deleteTaskAction(task.id);
+  expect(res.ok).toBe(true);
+  // stop() flagged the run aborted before the row cascaded away
+  expect(Registry.isAborted(run.id)).toBe(true);
+});
