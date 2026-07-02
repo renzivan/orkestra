@@ -158,3 +158,25 @@ test("deleteTaskAction stops the live run of a running task", async () => {
   // stop() flagged the run aborted before the row cascaded away
   expect(Registry.isAborted(run.id)).toBe(true);
 });
+
+test("deleting a non-running task does not call stop()", async () => {
+  const { db } = await import("../lib/db");
+  const A = await import("../app/actions");
+  const Tasks = await import("../lib/repos/tasks");
+  const Runs = await import("../lib/repos/runs");
+  const Registry = await import("../lib/engine/registry");
+
+  const task = await A.createTaskAction({
+    title: "t",
+    body: "",
+    target_type: "agent",
+    target_id: 1,
+  });
+  const run = Runs.startRun(db(), task.id);
+  Registry.register(run.id); // simulate a live run tracked by the engine
+
+  const res = await A.deleteTaskAction(task.id);
+  expect(res.ok).toBe(true);
+  // task.status stayed 'pending', so stop() was never called for this run
+  expect(Registry.isAborted(run.id)).toBe(false);
+});

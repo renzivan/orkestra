@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Task, TargetType, TaskStatus } from "@/lib/types";
 import type { Runnable } from "@/lib/runnable";
-import { taskLabel } from "@/lib/repos/tasks";
-import { createTaskAction, runTaskAction } from "../actions";
+import { taskLabel, taskDeleteMessage } from "@/lib/repos/tasks";
+import { createTaskAction, runTaskAction, deleteTaskAction } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 
 interface Named {
   id: number;
@@ -40,10 +41,13 @@ export function TasksClient({
   runnable: Record<number, Runnable>;
 }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState("");
   // The task currently being dragged (only runnable, non-running cards drag).
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  // The task currently mid-delete, so its card can show a busy state.
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const canCreate = flows.length > 0 || agents.length > 0;
 
@@ -69,11 +73,32 @@ export function TasksClient({
     if (t) void run(t);
   }
 
+  async function remove(t: Task) {
+    setError("");
+    const message = taskDeleteMessage(
+      taskLabel(prefix, t.id, t.title),
+      t.status === "running",
+    );
+    if (!(await confirm({ title: "Delete task", message }))) return;
+    setDeletingId(t.id);
+    try {
+      const res = await deleteTaskAction(t.id);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const byStatus = (status: TaskStatus) =>
     tasks.filter((t) => t.status === status);
 
   return (
     <div className="board-page">
+      {dialog}
       <div className="page-head">
         <div>
           <h1>Tasks</h1>
@@ -128,7 +153,9 @@ export function TasksClient({
                     blocked={blocked}
                     reason={blocked ? r.reason : undefined}
                     dragging={draggingId === t.id}
+                    deleting={deletingId === t.id}
                     onRun={() => run(t)}
+                    onDelete={() => remove(t)}
                     onDragStart={() => setDraggingId(t.id)}
                     onDragEnd={() => setDraggingId(null)}
                   />
@@ -209,7 +236,9 @@ function TaskCard({
   blocked,
   reason,
   dragging,
+  deleting,
   onRun,
+  onDelete,
   onDragStart,
   onDragEnd,
 }: {
@@ -219,7 +248,9 @@ function TaskCard({
   blocked: boolean;
   reason?: string;
   dragging: boolean;
+  deleting: boolean;
   onRun: () => void;
+  onDelete: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
@@ -257,6 +288,9 @@ function TaskCard({
         <Link className="btn small" href={`/tasks/${task.id}`}>
           View
         </Link>
+        <button className="btn small danger" onClick={onDelete} disabled={deleting}>
+          {deleting ? "Deleting…" : "Delete"}
+        </button>
       </div>
     </div>
   );

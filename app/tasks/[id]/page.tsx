@@ -6,6 +6,7 @@ import { latestRunForTask, getRunWithSteps } from "@/lib/repos/runs";
 import { getSettings } from "@/lib/repos/settings";
 import { taskRunnable } from "@/lib/runnable";
 import { RunView } from "./run-view";
+import { DeleteTaskButton } from "./delete-task-button";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,13 @@ export default async function TaskDetailPage({
             {taskLabel(prefix, task.id, task.title)}
           </h1>
         </div>
-        <span className={`badge ${task.status}`}>{task.status}</span>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <span className={`badge ${task.status}`}>{task.status}</span>
+          <DeleteTaskButton
+            task={task}
+            label={taskLabel(prefix, task.id, task.title)}
+          />
+        </div>
       </div>
 
       <RunView task={task} initialRun={run} runnable={runnable} />

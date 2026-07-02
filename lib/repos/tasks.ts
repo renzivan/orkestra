@@ -14,6 +14,14 @@ export function taskLabel(prefix: string, id: number, title: string): string {
   return prefix ? `${prefix}-${id}: ${title}` : title;
 }
 
+/** Confirmation message for deleting a task; warns when a live run will be
+ *  stopped. Label is the task's display label (see taskLabel). */
+export function taskDeleteMessage(label: string, running: boolean): string {
+  return running
+    ? `Delete "${label}"?\n\nThis task is running and will be stopped.\n\nThis can't be undone.`
+    : `Delete "${label}"? This can't be undone.`;
+}
+
 export function createTask(db: Database, input: TaskInput): Task {
   const now = new Date().toISOString();
   return db
