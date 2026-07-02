@@ -292,7 +292,42 @@ export function RunView({
 
       {canReply && <Reply onSend={reply} />}
       <div ref={endRef} />
+      <ScrollToTop />
     </div>
+  );
+}
+
+// A run's transcript grows long — thinking, tool calls, replies all stack up.
+// A caret parks bottom-right once you've scrolled past a screen, jumping back up.
+function ScrollToTop() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 400);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <button
+      className="to-top"
+      aria-label="Back to top"
+      title="Back to top"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M6 14l6-6 6 6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
   );
 }
 

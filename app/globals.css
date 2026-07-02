@@ -714,6 +714,29 @@ pre.output {
   flex-direction: column;
   gap: var(--s-2);
 }
+/* Back-to-top caret for the long board — parks over content, out of the way. */
+.to-top {
+  position: fixed;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.to-top:hover {
+  background: #f5f3ec;
+  transform: translateY(-1px);
+}
 .task-card.draggable {
   cursor: grab;
 }
