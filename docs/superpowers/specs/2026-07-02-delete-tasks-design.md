@@ -85,12 +85,14 @@ entities other things reference). The forms build the message inline:
 
 ## UI — detail page
 
-`app/tasks/[id]/page.tsx` renders the header; the interactive Delete button lives
-in the client `run-view.tsx` (the page is a server component).
-Add a `Delete` button (class `btn small danger`) to the detail header, wired
-through `useConfirm`.
+`app/tasks/[id]/page.tsx` is a server component, so the interactive Delete
+control is a dedicated client component `app/tasks/[id]/delete-task-button.tsx`
+rendered in the header next to the status badge.
+It owns `useConfirm` and calls `deleteTaskAction`.
+Button class `btn small danger`.
 On success → `router.push("/tasks")` then `router.refresh()`.
-On failure → surface the error in the existing run-view error area.
+On failure → the confirm dialog closes and the error shows via a local error
+state rendered under the button.
 
 ## UI — kanban card
 
