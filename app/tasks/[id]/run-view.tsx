@@ -66,6 +66,10 @@ export function RunView({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Stop has its own disabled flag, kept separate from `busy` (run/resume): a
+  // stop stays pending until the run winds down, and reusing `busy` would leave
+  // the Re-run/Resume buttons that replace Stop disabled too.
+  const [stopping, setStopping] = useState(false);
   const [runStatus, setRunStatus] = useState<string | null>(
     initialRun?.status ?? null,
   );
@@ -167,6 +171,12 @@ export function RunView({
     if (nearBottom) el.scrollTo({ top: el.scrollHeight });
   }, [steps, streaming]);
 
+  // Once the run leaves 'running' (the Stop button is gone), clear the pending
+  // stop flag so a later run's Stop starts enabled again.
+  useEffect(() => {
+    if (!streaming) setStopping(false);
+  }, [streaming]);
+
   async function run() {
     setBusy(true);
     try {
@@ -185,13 +195,16 @@ export function RunView({
 
   async function stopRun() {
     if (!initialRun) return;
-    setBusy(true);
+    setStopping(true);
+    // Stay disabled ("Stopping…") until the run actually winds down: stopRunAction
+    // only fires SIGTERM and returns immediately, so clearing this here would
+    // re-enable "Stop" for a beat before the SSE 'done' flips the view to the
+    // stopped state — that flash reads as a glitch. The effect below resets it
+    // once the run leaves 'running'; only clear early if the request itself fails.
     try {
-      // The live SSE 'done' (status: stopped) event refreshes the view once the
-      // runner winds the run down.
       await stopRunAction(initialRun.id);
-    } finally {
-      setBusy(false);
+    } catch {
+      setStopping(false);
     }
   }
 
@@ -231,8 +244,8 @@ export function RunView({
           )}
         </div>
         {streaming ? (
-          <button className="btn danger" onClick={stopRun} disabled={busy}>
-            {busy ? "Stopping…" : "Stop"}
+          <button className="btn danger" onClick={stopRun} disabled={stopping}>
+            {stopping ? "Stopping…" : "Stop"}
           </button>
         ) : runStatus === "stopped" ? (
           <div className="row">
