@@ -6,6 +6,7 @@ import type { Agent, Project, Skill } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
 import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
+import { toast } from "../toast";
 
 export interface AdapterChoice {
   id: number;
@@ -199,6 +200,7 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
         skill_ids: skillIds,
         project_ids: projectIds,
       });
+      toast.success(agent ? "Agent saved." : "Agent created.");
       if (agent) {
         router.refresh();
       } else {
@@ -206,7 +208,9 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
         router.push(`/agents/${row.id}`);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -218,7 +222,12 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
     if (!(await confirm({ title: "Delete agent", message }))) return;
     setError("");
     const res = await deleteAgentAction(agent.id);
-    if (!res.ok) return setError(res.error);
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Agent deleted.");
     router.push("/agents/new");
     router.refresh();
   }

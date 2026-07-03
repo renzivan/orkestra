@@ -13,6 +13,7 @@ import {
   deleteTaskAction,
 } from "../actions";
 import { useConfirm } from "../confirm-dialog";
+import { toast } from "../toast";
 
 interface Named {
   id: number;
@@ -116,8 +117,10 @@ export function TasksClient({
       const res = await deleteTaskAction(t.id);
       if (!res.ok) {
         setError(res.error);
+        toast.error(res.error);
         return;
       }
+      toast.success("Task deleted.");
       router.refresh();
     } finally {
       setDeletingId(null);
@@ -382,9 +385,12 @@ function NewTaskModal({
         target_type: targetType,
         target_id: targetId,
       });
+      toast.success("Task created.");
       onCreated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }

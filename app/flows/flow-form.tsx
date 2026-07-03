@@ -6,6 +6,7 @@ import type { Agent, Flow } from "@/lib/types";
 import { saveFlow, deleteFlowAction } from "../actions";
 import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
+import { toast } from "../toast";
 
 interface Props {
   flow: Flow | null;
@@ -43,10 +44,13 @@ export function FlowForm({ flow, agents }: Props) {
         name: name.trim(),
         agent_ids: agentIds,
       });
+      toast.success(flow ? "Flow saved." : "Flow created.");
       if (flow) router.refresh();
       else router.push(`/flows/${row.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -58,7 +62,12 @@ export function FlowForm({ flow, agents }: Props) {
     if (!(await confirm({ title: "Delete flow", message }))) return;
     setError("");
     const res = await deleteFlowAction(flow.id);
-    if (!res.ok) return setError(res.error);
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Flow deleted.");
     router.push("/flows/new");
     router.refresh();
   }

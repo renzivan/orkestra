@@ -6,6 +6,7 @@ import type { Task } from "@/lib/types";
 import { deleteTaskAction } from "../../actions";
 import { taskDeleteMessage } from "@/lib/repos/tasks";
 import { useConfirm } from "../../confirm-dialog";
+import { toast } from "../../toast";
 
 export function DeleteTaskButton({ task, label }: { task: Task; label: string }) {
   const router = useRouter();
@@ -22,8 +23,10 @@ export function DeleteTaskButton({ task, label }: { task: Task; label: string })
       const res = await deleteTaskAction(task.id);
       if (!res.ok) {
         setError(res.error);
+        toast.error(res.error);
         return;
       }
+      toast.success("Task deleted.");
       router.push("/tasks");
       router.refresh();
     } finally {

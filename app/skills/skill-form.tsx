@@ -6,6 +6,7 @@ import type { Skill } from "@/lib/types";
 import { saveSkill, deleteSkillAction } from "../actions";
 import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
+import { toast } from "../toast";
 
 export function SkillForm({ skill }: { skill: Skill | null }) {
   const router = useRouter();
@@ -20,10 +21,13 @@ export function SkillForm({ skill }: { skill: Skill | null }) {
     setBusy(true);
     try {
       const row = await saveSkill({ id: skill?.id, name: name.trim(), body });
+      toast.success(skill ? "Skill saved." : "Skill created.");
       if (skill) router.refresh();
       else router.push(`/skills/${row.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -35,7 +39,12 @@ export function SkillForm({ skill }: { skill: Skill | null }) {
     if (!(await confirm({ title: "Delete skill", message }))) return;
     setError("");
     const res = await deleteSkillAction(skill.id);
-    if (!res.ok) return setError(res.error);
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Skill deleted.");
     router.push("/skills/new");
     router.refresh();
   }

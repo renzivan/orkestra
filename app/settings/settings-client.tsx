@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Settings } from "@/lib/types";
 import { saveSettings } from "../actions";
+import { toast } from "../toast";
 
 export function SettingsClient({ settings }: { settings: Settings }) {
   const router = useRouter();
@@ -28,7 +29,12 @@ export function SettingsClient({ settings }: { settings: Settings }) {
     try {
       await saveSettings({ retries: r, step_timeout_seconds: t, task_prefix: p });
       setSaved(true);
+      toast.success("Settings saved.");
       router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }

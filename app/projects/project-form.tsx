@@ -6,6 +6,7 @@ import type { Project } from "@/lib/types";
 import { saveProject, deleteProjectAction, pickDirectory } from "../actions";
 import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
+import { toast } from "../toast";
 
 export function ProjectForm({ project }: { project: Project | null }) {
   const router = useRouter();
@@ -41,10 +42,13 @@ export function ProjectForm({ project }: { project: Project | null }) {
         name: name.trim(),
         path: path.trim(),
       });
+      toast.success(project ? "Project saved." : "Project created.");
       if (project) router.refresh();
       else router.push(`/projects/${row.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -60,7 +64,12 @@ export function ProjectForm({ project }: { project: Project | null }) {
     if (!(await confirm({ title: "Delete project", message }))) return;
     setError("");
     const res = await deleteProjectAction(project.id);
-    if (!res.ok) return setError(res.error);
+    if (!res.ok) {
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Project deleted.");
     router.push("/projects/new");
     router.refresh();
   }

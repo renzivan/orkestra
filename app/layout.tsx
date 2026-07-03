@@ -8,6 +8,7 @@ import { listSkills } from "@/lib/repos/skills";
 import { listProjects } from "@/lib/repos/projects";
 import { countUnreadTasks } from "@/lib/repos/tasks";
 import { Nav, type NavGroup } from "./nav";
+import { Toaster } from "./toast";
 
 export const metadata: Metadata = {
   title: "Orkestra",
@@ -43,6 +44,7 @@ export default function RootLayout({
           </aside>
           <main className="content">{children}</main>
         </div>
+        <Toaster />
       </body>
     </html>
   );

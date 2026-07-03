@@ -834,3 +834,75 @@ pre.output {
   gap: var(--s-2);
   margin-top: var(--s-1);
 }
+
+/* Toasts — transient save/delete/create feedback, stacked bottom-right above
+   the modal overlay (z 50). */
+.toasts {
+  position: fixed;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: min(380px, calc(100vw - 2 * var(--s-4)));
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--s-2) var(--s-3);
+  font-size: 14px;
+  color: var(--fg);
+  animation: toast-in 160ms ease-out;
+}
+.toast.success {
+  border-left-color: #3d8b5f;
+}
+.toast.error {
+  border-left-color: var(--danger);
+}
+.toast-icon {
+  flex: none;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.toast.success .toast-icon {
+  color: #3d8b5f;
+}
+.toast.error .toast-icon {
+  color: var(--danger);
+}
+.toast-body {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.toast-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+.toast-close:hover {
+  color: var(--fg);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
