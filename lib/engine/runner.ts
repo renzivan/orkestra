@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Agent, Task } from "../types";
-import { getTask, setTaskStatus } from "../repos/tasks";
+import { getTask, setTaskStatus as repoSetTaskStatus } from "../repos/tasks";
 import { getFlow } from "../repos/flows";
 import { getAgent } from "../repos/agents";
 import { getAdapter } from "../repos/adapters";
@@ -14,7 +14,7 @@ import {
   type StreamTransform,
   type TranscriptEntry,
 } from "./transcript";
-import { publish } from "./bus";
+import { publish, publishTasksChanged } from "./bus";
 import {
   register,
   unregister,
@@ -22,6 +22,14 @@ import {
   clearProc,
   isAborted,
 } from "./registry";
+
+// Every task status change in the runner (start, settle) also pings the tasks
+// topic, so a board sitting open re-renders live instead of waiting for a manual
+// refresh. Wrapping the repo call keeps all call sites notifying with no repeats.
+function setTaskStatus(db: Database, id: number, status: Task["status"]): void {
+  repoSetTaskStatus(db, id, status);
+  publishTasksChanged();
+}
 
 /**
  * Run a task end to end: resolve its target to an ordered list of agents,

@@ -18,11 +18,18 @@ export type RunEvent =
   | { type: "done"; status: string };
 
 type Listener = (event: RunEvent) => void;
+type TaskListener = () => void;
 
 const g = globalThis as typeof globalThis & {
   __orkestraBus?: Map<number, Set<Listener>>;
+  __orkestraTaskBus?: Set<TaskListener>;
 };
 const listeners: Map<number, Set<Listener>> = (g.__orkestraBus ??= new Map());
+// A single process-wide topic for "some task changed status". The tasks board
+// subscribes (via /api/tasks/stream) to re-render when a run starts or settles
+// in the background — the board only has tasks, not run ids, so it can't use the
+// per-run channel above. Pinned on globalThis for the same cross-bundle reason.
+const taskListeners: Set<TaskListener> = (g.__orkestraTaskBus ??= new Set());
 
 export function subscribe(runId: number, fn: Listener): () => void {
   let set = listeners.get(runId);
@@ -40,5 +47,36 @@ export function subscribe(runId: number, fn: Listener): () => void {
 export function publish(runId: number, event: RunEvent): void {
   const set = listeners.get(runId);
   if (!set) return;
-  for (const fn of set) fn(event);
+  // Isolate each subscriber: a listener that throws (e.g. an SSE stream whose
+  // client already disconnected) must never propagate into the runner that
+  // published the event, or it would break the run mid-flight.
+  for (const fn of set) {
+    try {
+      fn(event);
+    } catch {
+      /* a broken subscriber can't take down the publisher */
+    }
+  }
+}
+
+/** Subscribe to task-status changes (any task started or settled). */
+export function subscribeTasks(fn: TaskListener): () => void {
+  taskListeners.add(fn);
+  return () => {
+    taskListeners.delete(fn);
+  };
+}
+
+/** Signal that a task changed status, so the board can re-render. */
+export function publishTasksChanged(): void {
+  // Same isolation as publish(): a throwing subscriber (e.g. a stale SSE stream
+  // enqueuing into a closed controller) must not propagate into the runner's
+  // setTaskStatus and break the run.
+  for (const fn of taskListeners) {
+    try {
+      fn();
+    } catch {
+      /* a broken subscriber can't take down the publisher */
+    }
+  }
 }

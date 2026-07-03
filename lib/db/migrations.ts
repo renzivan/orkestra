@@ -283,4 +283,19 @@ export const MIGRATIONS: string[][] = [
        ('Default', '', NULL, '', '', 1, 1,
         strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   ],
+
+  // v10 — unread tracking for the sidebar Tasks badge. `settled_at` records when
+  // a task last entered a terminal status; `seen_at` records when the user last
+  // opened its detail page. A task is unread while settled and seen_at is null or
+  // older than settled_at (see countUnreadTasks). Kept separate from updated_at so
+  // a future task edit (which bumps updated_at) can't falsely re-flag a read task.
+  // Both are ADD COLUMN (appended), so getTask's `SELECT *` mapping stays
+  // order-independent. Backfill starts the badge clean: existing terminal rows are
+  // marked settled and already seen; non-terminal rows keep both null.
+  [
+    `ALTER TABLE tasks ADD COLUMN settled_at TEXT`,
+    `ALTER TABLE tasks ADD COLUMN seen_at TEXT`,
+    `UPDATE tasks SET settled_at = updated_at, seen_at = updated_at
+       WHERE status IN ('succeeded','failed','stopped')`,
+  ],
 ];

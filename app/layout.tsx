@@ -6,6 +6,7 @@ import { listAgents } from "@/lib/repos/agents";
 import { listFlows } from "@/lib/repos/flows";
 import { listSkills } from "@/lib/repos/skills";
 import { listProjects } from "@/lib/repos/projects";
+import { countUnreadTasks } from "@/lib/repos/tasks";
 import { Nav, type NavGroup } from "./nav";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
     { title: "Agents", base: "/agents", items: named(listAgents(database)) },
     { title: "Skills", base: "/skills", items: named(listSkills(database)) },
   ];
+  const unreadTasks = countUnreadTasks(database);
   return (
     <html lang="en">
       <body>
@@ -37,7 +39,7 @@ export default function RootLayout({
               <span className="dot" />
               Orkestra
             </Link>
-            <Nav groups={groups} />
+            <Nav groups={groups} unreadTasks={unreadTasks} />
           </aside>
           <main className="content">{children}</main>
         </div>

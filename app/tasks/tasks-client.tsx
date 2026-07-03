@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Task, TargetType, TaskStatus } from "@/lib/types";
 import type { Runnable } from "@/lib/runnable";
-import { taskLabel, taskDeleteMessage } from "@/lib/repos/tasks";
+import { taskLabel, taskDeleteMessage, isTaskUnread } from "@/lib/repos/tasks";
 import { createTaskAction, runTaskAction, deleteTaskAction } from "../actions";
 import { useConfirm } from "../confirm-dialog";
 
@@ -50,6 +50,17 @@ export function TasksClient({
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const canCreate = flows.length > 0 || agents.length > 0;
+
+  // The board (and the sidebar unread badge) are server-rendered per request, so
+  // a run starting or settling in the background won't move its card or bump the
+  // badge on its own. Subscribe to the tasks topic; each nudge triggers a
+  // router.refresh(), which re-renders both the board and the layout. Deps are
+  // just [router], so a refresh doesn't tear the connection down.
+  useEffect(() => {
+    const es = new EventSource("/api/tasks/stream");
+    es.onmessage = () => router.refresh();
+    return () => es.close();
+  }, [router]);
 
   function targetName(t: Task) {
     const list = t.target_type === "flow" ? flows : agents;
@@ -150,6 +161,7 @@ export function TasksClient({
                     task={t}
                     label={taskLabel(prefix, t.id, t.title)}
                     target={`${t.target_type}: ${targetName(t)}`}
+                    unread={isTaskUnread(t)}
                     blocked={blocked}
                     reason={blocked ? r.reason : undefined}
                     dragging={draggingId === t.id}
@@ -233,6 +245,7 @@ function TaskCard({
   task,
   label,
   target,
+  unread,
   blocked,
   reason,
   dragging,
@@ -245,6 +258,9 @@ function TaskCard({
   task: Task;
   label: string;
   target: string;
+  /** Settled since last opened — flag it so the user sees which card the badge
+   *  is counting. Cleared when the task's detail is opened. */
+  unread: boolean;
   blocked: boolean;
   reason?: string;
   dragging: boolean;
@@ -260,7 +276,7 @@ function TaskCard({
 
   return (
     <div
-      className={`task-card${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}`}
+      className={`task-card${canDrag ? " draggable" : ""}${dragging ? " dragging" : ""}${unread ? " unread" : ""}`}
       draggable={canDrag}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", String(task.id));
@@ -269,6 +285,7 @@ function TaskCard({
       }}
       onDragEnd={onDragEnd}
     >
+      {unread && <span className="task-card-dot" aria-label="Needs attention" />}
       <Link href={`/tasks/${task.id}`} className="task-card-title">
         {label}
       </Link>

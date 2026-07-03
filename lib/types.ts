@@ -67,6 +67,11 @@ export interface Task {
   status: TaskStatus;
   created_at: string;
   updated_at: string;
+  // Set when the task last entered a terminal status (succeeded/failed/stopped).
+  settled_at: string | null;
+  // Set when the user last opened the task's detail page. A task counts as
+  // unread while seen_at is null or older than settled_at (see countUnreadTasks).
+  seen_at: string | null;
 }
 
 export interface RunStep {

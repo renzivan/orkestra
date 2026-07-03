@@ -11,6 +11,7 @@ import {
   replyToRunAction,
   stopRunAction,
   resumeRunAction,
+  markTaskSeenAction,
 } from "../../actions";
 
 interface StepView {
@@ -132,7 +133,9 @@ export function RunView({
         finished = true;
         setRunStatus(e.status);
         es.close();
-        router.refresh();
+        // The run just settled while we're watching — mark it seen so it doesn't
+        // pop back into the unread badge, then refresh (also updates the badge).
+        void markTaskSeenAction(task.id).then(() => router.refresh());
       }
     };
     // While the run is active, let EventSource auto-reconnect on a transient
@@ -143,7 +146,15 @@ export function RunView({
     };
 
     return () => es.close();
-  }, [initialRun, router]);
+  }, [initialRun, router, task.id]);
+
+  // Opening an already-settled task clears it from the sidebar unread badge. A
+  // live run is cleared by the stream's 'done' handler instead, so skip it here
+  // to avoid tearing down the EventSource with a refresh mid-stream.
+  useEffect(() => {
+    if (initialRun?.status === "running") return;
+    void markTaskSeenAction(task.id).then(() => router.refresh());
+  }, [task.id, initialRun?.status, router]);
 
   // Follow the stream: while running, keep the newest output in view — but only
   // if the user is already near the bottom, so scrolling up to read isn't yanked.

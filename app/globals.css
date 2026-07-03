@@ -208,6 +208,24 @@ a:hover {
   background: var(--accent);
   color: var(--fg);
 }
+/* Tasks link carries the unread badge, pushed to the right edge. */
+.nav-sub a.nav-task {
+  display: flex;
+  align-items: center;
+}
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
 .nav-empty {
   margin-left: 22px;
   padding: 6px var(--s-3);
@@ -705,6 +723,7 @@ pre.output {
   padding: 0 var(--s-2) var(--s-2);
 }
 .task-card {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -713,6 +732,23 @@ pre.output {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
+}
+/* Unread = settled since last opened; the card the sidebar badge is counting. */
+.task-card.unread {
+  border-color: #e7b4b4;
+  box-shadow: 0 0 0 1px #e7b4b4, var(--shadow-1);
+}
+.task-card.unread .task-card-title {
+  padding-right: 14px;
+}
+.task-card-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d64545;
 }
 /* Back-to-top caret for the long board — parks over content, out of the way. */
 .to-top {

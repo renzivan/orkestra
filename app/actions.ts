@@ -232,6 +232,14 @@ export async function stopRunAction(runId: number): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+/** Mark a task's detail as seen, clearing it from the sidebar unread badge.
+ *  Revalidates the layout (the badge lives there) so the count drops. */
+export async function markTaskSeenAction(id: number): Promise<{ ok: true }> {
+  Tasks.markTaskSeen(db(), id);
+  revalidate("/tasks");
+  return { ok: true };
+}
+
 /** Resume a stopped run: re-run from its interrupted step, keeping prior work. */
 export async function resumeRunAction(runId: number): Promise<{ ok: true }> {
   // resumeRun reopens the run + resets the step synchronously before its first

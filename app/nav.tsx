@@ -14,7 +14,14 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-export function Nav({ groups }: { groups: NavGroup[] }) {
+export function Nav({
+  groups,
+  unreadTasks,
+}: {
+  groups: NavGroup[];
+  /** Tasks needing attention (settled + unseen); shown as a badge on Tasks. */
+  unreadTasks: number;
+}) {
   const path = usePathname();
   const isActive = (href: string) =>
     path === href || path.startsWith(href + "/");
@@ -26,8 +33,16 @@ export function Nav({ groups }: { groups: NavGroup[] }) {
           <span className="nav-group-label">Work</span>
         </div>
         <div className="nav-sub">
-          <Link href="/tasks" className={path === "/tasks" ? "active" : ""}>
+          <Link
+            href="/tasks"
+            className={`nav-task${path === "/tasks" ? " active" : ""}`}
+          >
             Tasks
+            {unreadTasks > 0 && (
+              <span className="nav-badge" aria-label={`${unreadTasks} tasks need attention`}>
+                {unreadTasks > 99 ? "99+" : unreadTasks}
+              </span>
+            )}
           </Link>
         </div>
       </div>
