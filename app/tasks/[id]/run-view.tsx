@@ -10,6 +10,7 @@ import {
   runTaskAction,
   replyToRunAction,
   stopRunAction,
+  pauseRunAction,
   resumeRunAction,
   markTaskSeenAction,
 } from "../../actions";
@@ -70,6 +71,9 @@ export function RunView({
   // stop stays pending until the run winds down, and reusing `busy` would leave
   // the Re-run/Resume buttons that replace Stop disabled too.
   const [stopping, setStopping] = useState(false);
+  // Pause has its own pending flag, like stop: it stays "Pausing…" until the run
+  // winds down to 'paused', so the button doesn't flicker back to enabled.
+  const [pausing, setPausing] = useState(false);
   const [runStatus, setRunStatus] = useState<string | null>(
     initialRun?.status ?? null,
   );
@@ -174,7 +178,10 @@ export function RunView({
   // Once the run leaves 'running' (the Stop button is gone), clear the pending
   // stop flag so a later run's Stop starts enabled again.
   useEffect(() => {
-    if (!streaming) setStopping(false);
+    if (!streaming) {
+      setStopping(false);
+      setPausing(false);
+    }
   }, [streaming]);
 
   async function run() {
@@ -205,6 +212,18 @@ export function RunView({
       await stopRunAction(initialRun.id);
     } catch {
       setStopping(false);
+    }
+  }
+
+  async function pauseRun() {
+    if (!initialRun) return;
+    setPausing(true);
+    // Stays disabled until the SSE 'done' flips the view to paused (see the
+    // effect above); only clear early if the request itself fails.
+    try {
+      await pauseRunAction(initialRun.id);
+    } catch {
+      setPausing(false);
     }
   }
 
@@ -244,28 +263,36 @@ export function RunView({
           )}
         </div>
         {streaming ? (
-          <button className="btn danger" onClick={stopRun} disabled={stopping}>
-            {stopping ? "Stopping…" : "Stop"}
-          </button>
-        ) : runStatus === "stopped" ? (
           <div className="row">
-            <button
-              className="btn"
-              onClick={run}
-              disabled={busy || blocked}
-              title={blocked ? runnable.reason : undefined}
-            >
-              Re-run
+            <button className="btn" onClick={pauseRun} disabled={pausing}>
+              {pausing ? "Pausing…" : "Pause"}
             </button>
             <button
-              className="btn primary"
-              onClick={resume}
-              disabled={busy || blocked}
-              title={blocked ? runnable.reason : undefined}
+              className="btn danger"
+              onClick={stopRun}
+              disabled={stopping}
             >
-              Resume
+              {stopping ? "Stopping…" : "Stop"}
             </button>
           </div>
+        ) : runStatus === "paused" ? (
+          <button
+            className="btn primary"
+            onClick={resume}
+            disabled={busy || blocked}
+            title={blocked ? runnable.reason : undefined}
+          >
+            Resume
+          </button>
+        ) : runStatus === "stopped" ? (
+          <button
+            className="btn"
+            onClick={run}
+            disabled={busy || blocked}
+            title={blocked ? runnable.reason : undefined}
+          >
+            Re-run
+          </button>
         ) : (
           <button
             className="btn primary"
@@ -282,9 +309,16 @@ export function RunView({
 
       {stepList.map((s, i) => {
         // A step whose input isn't the previous turn's answer is a user reply
-        // (vs a flow handing one agent's output to the next).
+        // (vs a flow handing one agent's output to the next). A resume
+        // continuation is neither: it re-sends the interrupted step's own input
+        // to pick up where it stopped, so don't render that as a user bubble.
         const prev = i > 0 ? stepList[i - 1] : null;
-        const isReply = prev != null && s.input !== answerText(prev.entries);
+        const isResumeContinuation =
+          prev != null && prev.status === "paused" && s.input === prev.input;
+        const isReply =
+          prev != null &&
+          s.input !== answerText(prev.entries) &&
+          !isResumeContinuation;
         return (
           <div key={s.position} className="turn">
             {isReply && <Msg role="user">{s.input}</Msg>}
@@ -301,6 +335,9 @@ export function RunView({
                   failed
                   {s.exit_code != null ? ` (exit ${s.exit_code})` : ""}
                 </div>
+              )}
+              {s.status === "paused" && (
+                <div className="muted mono stopped-note">paused</div>
               )}
               {s.status === "stopped" && (
                 <div className="muted mono stopped-note">stopped</div>

@@ -448,6 +448,11 @@ th {
   background: #f2f1ec;
   border-color: color-mix(in srgb, var(--muted) 25%, var(--line));
 }
+.badge.paused {
+  color: var(--info);
+  background: #eef1f6;
+  border-color: color-mix(in srgb, var(--info) 25%, var(--line));
+}
 
 .stopped-note {
   margin-top: var(--s-2);

@@ -12,6 +12,9 @@ import type { Subprocess } from "bun";
 interface RunHandle {
   proc: Subprocess | null;
   aborted: boolean;
+  // Why the run was aborted: 'pause' winds it down to a resumable 'paused'
+  // state, 'stop' to a terminal 'stopped'. null until a halt is requested.
+  intent: "pause" | "stop" | null;
 }
 
 const g = globalThis as typeof globalThis & {
@@ -21,7 +24,7 @@ const runs: Map<number, RunHandle> = (g.__orkestraRuns ??= new Map());
 
 /** Begin tracking a run. Resets state, so resuming can reuse the same run id. */
 export function register(runId: number): void {
-  runs.set(runId, { proc: null, aborted: false });
+  runs.set(runId, { proc: null, aborted: false, intent: null });
 }
 
 /** Record the process currently executing a step so stop() can kill it. */
@@ -36,12 +39,29 @@ export function clearProc(runId: number): void {
   if (h) h.proc = null;
 }
 
-/** Request a stop: flag the run aborted and kill its live process, if any. */
-export function stop(runId: number): void {
+/** Shared halt: flag the run aborted with an intent and kill its live process.
+ *  SIGTERM lets the CLI exit; the runner treats the killed step per the intent. */
+function halt(runId: number, intent: "pause" | "stop"): void {
   const h = runs.get(runId);
   if (!h) return;
   h.aborted = true;
-  h.proc?.kill(); // SIGTERM — lets the CLI exit; runner treats it as stopped
+  h.intent = intent;
+  h.proc?.kill();
+}
+
+/** Pause a run: halt now, keep it resumable (--resume continues its session). */
+export function pause(runId: number): void {
+  halt(runId, "pause");
+}
+
+/** Stop a run: halt now, terminally. The run stays as history; Re-run starts fresh. */
+export function stop(runId: number): void {
+  halt(runId, "stop");
+}
+
+/** The recorded halt intent, or null if the run wasn't halted / isn't tracked. */
+export function abortIntent(runId: number): "pause" | "stop" | null {
+  return runs.get(runId)?.intent ?? null;
 }
 
 /** Whether a stop has been requested for this run. */

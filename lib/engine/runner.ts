@@ -21,6 +21,7 @@ import {
   setProc,
   clearProc,
   isAborted,
+  abortIntent,
 } from "./registry";
 
 // Every task status change in the runner (start, settle) also pings the tasks
@@ -48,14 +49,22 @@ export async function runTask(
   const run = Runs.startRun(db, taskId);
   setTaskStatus(db, taskId, "running");
 
-  return runFrom(db, run.id, task, agents, settings, 0, task.body);
+  return runFrom(db, run.id, task, agents, settings, 0, 0, task.body);
 }
 
 /**
- * Resume a stopped run: re-run from its first non-succeeded step, keeping the
- * completed earlier steps and chaining the previous step's output (or the task
- * body, if the very first step) as input. The interrupted step is deleted and
- * re-created fresh, so the run keeps a single coherent timeline.
+ * Resume a stopped run. Two shapes:
+ *
+ * - Stopped *between* steps (every step succeeded, the flow just never reached
+ *   the next agent): continue with the remaining agents, chaining the last
+ *   output as input.
+ * - Stopped *mid-step* (the last step is non-succeeded): the interrupted step is
+ *   KEPT — its partial transcript stays on screen — and a continuation step is
+ *   appended after it that resumes the agent's captured CLI session (--resume,
+ *   re-sending the step's original input) so the agent picks up its prior context
+ *   instead of cold-starting. The remaining flow agents then run as usual. No
+ *   session (a non-Claude adapter, or a kill before one was emitted) falls back
+ *   to a fresh attempt of that agent.
  */
 export async function resumeRun(
   db: Database,
@@ -68,20 +77,46 @@ export async function resumeRun(
   const settings = getSettings(db);
 
   const stoppedAt = run.steps.findIndex((s) => s.status !== "succeeded");
-  const startPos = stoppedAt === -1 ? run.steps.length : stoppedAt;
-  const input = startPos === 0 ? task.body : run.steps[startPos - 1].output;
 
   Runs.reopenRun(db, runId);
   setTaskStatus(db, task.id, "running");
-  Runs.deleteStepsFrom(db, runId, startPos);
 
-  return runFrom(db, runId, task, agents, settings, startPos, input);
+  if (stoppedAt === -1) {
+    // Every step finished; resume the flow at the next agent. Positions still
+    // map 1:1 to agents here, so agent index and step position are the same.
+    const nextAgent = run.steps.length;
+    const seedInput =
+      nextAgent === 0 ? task.body : run.steps[nextAgent - 1].output;
+    return runFrom(db, runId, task, agents, settings, nextAgent, nextAgent, seedInput);
+  }
+
+  // Mid-step: preserve the interrupted step and append a continuation. The
+  // continuation re-runs the same agent (index `stoppedAt`) as a new step at the
+  // end (position run.steps.length), resuming its session and re-sending its
+  // original input; the loop then carries on into any later flow agents.
+  const interrupted = run.steps[stoppedAt];
+  const resume = interrupted.session_id ?? undefined;
+  return runFrom(
+    db,
+    runId,
+    task,
+    agents,
+    settings,
+    stoppedAt,
+    run.steps.length,
+    interrupted.input,
+    resume,
+  );
 }
 
 /**
  * Shared step loop for both a fresh run and a resume. Registers the run so it
- * can be stopped, executes agents from `startPos` chaining output→input, and
+ * can be stopped, executes agents from `startAgent` chaining output→input, and
  * lands the run in a terminal state (succeeded / failed / stopped).
+ *
+ * Agent index and step position are tracked separately: a resume appends a
+ * continuation step *after* the interrupted step it preserves, so the position
+ * of a step can run ahead of its agent's index in the flow.
  */
 async function runFrom(
   db: Database,
@@ -89,22 +124,29 @@ async function runFrom(
   task: Task,
   agents: Agent[],
   settings: { step_timeout_seconds: number; retries: number },
+  startAgent: number,
   startPos: number,
   seedInput: string,
+  // Only set by a resume: the CLI session the interrupted step captured. Applies
+  // to the first re-run agent (startAgent) alone — later agents are genuinely
+  // new conversations, so they never inherit a session.
+  resumeSession?: string,
 ): Promise<Runs.RunWithSteps> {
   register(runId);
   let input = seedInput;
   try {
-    for (let pos = startPos; pos < agents.length; pos++) {
+    let pos = startPos;
+    for (let ai = startAgent; ai < agents.length; ai++, pos++) {
       if (isAborted(runId)) return stopRun(db, runId, task.id);
 
-      const agent = agents[pos];
+      const agent = agents[ai];
       const adapter =
         agent.adapter_id == null ? null : getAdapter(db, agent.adapter_id);
       if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
 
       const step = await executeStep(db, runId, pos, agent, adapter, settings, {
         input,
+        resume: ai === startAgent ? resumeSession : undefined,
       });
       if (step.stopped) return stopRun(db, runId, task.id);
       if (!step.ok) {
@@ -243,20 +285,22 @@ async function executeStep(
   clearProc(runId);
   if (sessionId) Runs.setStepSession(db, stepId, sessionId);
 
-  // A user stop killed the process — record the step as stopped (not failed)
-  // and let the caller wind the run down. The abort flag, not the exit code, is
-  // the source of truth: a killed CLI exits non-zero but that isn't a failure.
+  // A user halt killed the process — record the step as paused or stopped (not
+  // failed) per the halt intent, and let the caller wind the run down. The abort
+  // flag, not the exit code, is the source of truth: a killed CLI exits non-zero
+  // but that isn't a failure.
   if (isAborted(runId)) {
+    const status = abortIntent(runId) === "pause" ? "paused" : "stopped";
     Runs.finishRunStep(db, stepId, {
       output: result.stdout,
       exit_code: result.exitCode,
       error: null,
-      status: "stopped",
+      status,
     });
     publish(runId, {
       type: "step_done",
       position: pos,
-      status: "stopped",
+      status,
       exit_code: result.exitCode,
     });
     return { ok: false, stopped: true };
@@ -307,21 +351,19 @@ function fail(
   return Runs.getRunWithSteps(db, runId);
 }
 
-/** Wind a run down after a user stop: mark the run and task stopped. The
- *  interrupted step was already marked stopped by executeStep (if one was
- *  mid-flight); a stop between steps simply leaves earlier steps intact. */
+/** Wind a run down after a user halt: mark the run and task paused or stopped to
+ *  match the halt intent. The interrupted step (if one was mid-flight) was
+ *  already marked to match by executeStep; a halt between steps leaves earlier
+ *  steps intact. */
 function stopRun(
   db: Database,
   runId: number,
   taskId: number,
 ): Runs.RunWithSteps {
-  Runs.finishRun(db, runId, {
-    status: "stopped",
-    final_output: null,
-    error: null,
-  });
-  setTaskStatus(db, taskId, "stopped");
-  publish(runId, { type: "done", status: "stopped" });
+  const status = abortIntent(runId) === "pause" ? "paused" : "stopped";
+  Runs.finishRun(db, runId, { status, final_output: null, error: null });
+  setTaskStatus(db, taskId, status);
+  publish(runId, { type: "done", status });
   return Runs.getRunWithSteps(db, runId);
 }
 

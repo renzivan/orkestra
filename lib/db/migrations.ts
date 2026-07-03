@@ -299,7 +299,70 @@ export const MIGRATIONS: string[][] = [
        WHERE status IN ('succeeded','failed','stopped')`,
   ],
 
-  // v11 — an agent's instructions become an ordered set of named files instead
+  // v11 — add a 'paused' status (a resumable rest state: user halted the run but
+  // intends to continue it via --resume, distinct from a terminal 'stopped').
+  // SQLite can't alter a CHECK, so each table is rebuilt in place exactly as v6
+  // did. Column order in tasks_new mirrors the live table (v10's settled_at,
+  // seen_at trail the original columns) so `INSERT ... SELECT *` aligns.
+  [
+    `PRAGMA foreign_keys=OFF`,
+
+    `CREATE TABLE tasks_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      target_type TEXT NOT NULL CHECK (target_type IN ('flow','agent')),
+      target_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','running','succeeded','failed','stopped','paused')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      settled_at TEXT,
+      seen_at TEXT
+    )`,
+    `INSERT INTO tasks_new SELECT * FROM tasks`,
+    `DROP TABLE tasks`,
+    `ALTER TABLE tasks_new RENAME TO tasks`,
+
+    `CREATE TABLE runs_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running','succeeded','failed','stopped','paused')),
+      final_output TEXT,
+      error TEXT,
+      started_at TEXT NOT NULL,
+      finished_at TEXT
+    )`,
+    `INSERT INTO runs_new SELECT * FROM runs`,
+    `DROP TABLE runs`,
+    `ALTER TABLE runs_new RENAME TO runs`,
+
+    `CREATE TABLE run_steps_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      agent_id INTEGER NOT NULL,
+      agent_name TEXT NOT NULL,
+      input TEXT NOT NULL DEFAULT '',
+      output TEXT NOT NULL DEFAULT '',
+      exit_code INTEGER,
+      error TEXT,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running','succeeded','failed','stopped','paused')),
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      transcript TEXT NOT NULL DEFAULT '[]',
+      session_id TEXT
+    )`,
+    `INSERT INTO run_steps_new SELECT * FROM run_steps`,
+    `DROP TABLE run_steps`,
+    `ALTER TABLE run_steps_new RENAME TO run_steps`,
+
+    `PRAGMA foreign_keys=ON`,
+  ],
+
+  // v12 — an agent's instructions become an ordered set of named files instead
   // of one `base_instruction` blob. Each file has a name, a markdown body, a
   // position, and an entry flag; exactly one file per agent is the ENTRY (it
   // composes first). The partial unique index enforces one entry per agent,

@@ -10,13 +10,17 @@ import * as Flows from "../../lib/repos/flows";
 import * as Tasks from "../../lib/repos/tasks";
 import * as Runs from "../../lib/repos/runs";
 import * as Settings from "../../lib/repos/settings";
-import { runTask, replyToRun } from "../../lib/engine/runner";
+import { runTask, replyToRun, resumeRun } from "../../lib/engine/runner";
 import { subscribeTasks } from "../../lib/engine/bus";
 
 const ECHO = "bash test/fixtures/echo-model.sh";
 // Emits a stable session_id + echoes stdin; "stream-json" in the command makes
 // the runner parse it as Claude output (so session capture kicks in).
 const SESSION = "bash test/fixtures/session-model.sh stream-json";
+// Like SESSION, but tags its answer "resumed:" when invoked with --resume and
+// "fresh:" otherwise — lets a test prove resume threads the session to the CLI.
+const RESUME =
+  "bash test/fixtures/resume-model.sh stream-json {resume:--resume}";
 
 function agent(db: any, name: string, adapterId: number) {
   return Agents.createAgent(db, {
@@ -121,6 +125,142 @@ test("captures session id and replies resume the run with a new step", async () 
   expect(full.steps[1].output).toBe("echo:more");
   expect(full.final_output).toBe("echo:more");
   expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
+});
+
+// Seed a run whose single step was killed mid-flight (status 'paused'),
+// optionally after capturing a CLI session id + partial transcript.
+function seedPausedRun(
+  db: any,
+  taskId: number,
+  a: { id: number; name: string },
+  body: string,
+  opts: { session?: string; transcript?: string } = {},
+) {
+  const run = Runs.startRun(db, taskId);
+  const stepId = Runs.addRunStep(db, run.id, {
+    position: 0,
+    agent_id: a.id,
+    agent_name: a.name,
+    input: body,
+  });
+  if (opts.session) Runs.setStepSession(db, stepId, opts.session);
+  if (opts.transcript) Runs.setStepTranscript(db, stepId, opts.transcript);
+  Runs.finishRunStep(db, stepId, {
+    output: "",
+    exit_code: 143,
+    error: null,
+    status: "paused",
+  });
+  Runs.finishRun(db, run.id, {
+    status: "paused",
+    final_output: null,
+    error: null,
+  });
+  return run;
+}
+
+test("resuming a stopped step keeps it and appends a --resume continuation", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "res", command: RESUME });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  // The interrupted step captured a session id (Claude adapters emit one before
+  // the SIGTERM lands) and some partial transcript the user was watching.
+  const partial = JSON.stringify([{ kind: "text", text: "partial work" }]);
+  const run = seedPausedRun(db, t.id, a, t.body, {
+    session: "sess-123",
+    transcript: partial,
+  });
+
+  const resumed = await resumeRun(db, run.id);
+
+  expect(resumed.status).toBe("succeeded");
+  const full = Runs.getRunWithSteps(db, run.id);
+  // The paused step is preserved (its transcript stays on screen) and a
+  // continuation is appended — not a wiped, single re-run.
+  expect(full.steps.length).toBe(2);
+  expect(full.steps[0].status).toBe("paused");
+  expect(full.steps[0].transcript).toContain("partial work");
+  expect(full.steps[1].position).toBe(1);
+  expect(full.steps[1].input).toBe("hi"); // re-sends the original input
+  // "resumed:" (not "fresh:") proves --resume reached the CLI on the continuation.
+  expect(full.steps[1].output).toBe("resumed:hi");
+  expect(full.final_output).toBe("resumed:hi");
+  expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
+});
+
+test("resuming a stopped step with no session falls back to a fresh continuation", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "res", command: RESUME });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  // No session captured — a non-Claude adapter, or a kill before one emitted.
+  const run = seedPausedRun(db, t.id, a, t.body);
+
+  const resumed = await resumeRun(db, run.id);
+
+  expect(resumed.status).toBe("succeeded");
+  const full = Runs.getRunWithSteps(db, run.id);
+  expect(full.steps.length).toBe(2);
+  expect(full.steps[0].status).toBe("paused"); // still preserved
+  expect(full.steps[1].output).toBe("fresh:hi"); // no --resume flag passed
+});
+
+test("resuming a flow stopped between steps continues the remaining agents", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
+  const a1 = agent(db, "a1", m.id);
+  const a2 = agent(db, "a2", m.id);
+  const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "seed",
+    target_type: "flow",
+    target_id: f.id,
+  });
+
+  // First agent finished, then the run was stopped before the second started:
+  // every existing step 'succeeded', so resume just runs the remaining agent.
+  const run = Runs.startRun(db, t.id);
+  const s0 = Runs.addRunStep(db, run.id, {
+    position: 0,
+    agent_id: a1.id,
+    agent_name: a1.name,
+    input: "seed",
+  });
+  Runs.finishRunStep(db, s0, {
+    output: "echo:seed",
+    exit_code: 0,
+    error: null,
+    status: "succeeded",
+  });
+  Runs.finishRun(db, run.id, {
+    status: "stopped",
+    final_output: null,
+    error: null,
+  });
+
+  const resumed = await resumeRun(db, run.id);
+
+  expect(resumed.status).toBe("succeeded");
+  const full = Runs.getRunWithSteps(db, run.id);
+  expect(full.steps.length).toBe(2); // a1 kept, a2 appended
+  expect(full.steps[0].output).toBe("echo:seed"); // untouched
+  expect(full.steps[1].agent_name).toBe("a2");
+  expect(full.steps[1].input).toBe("echo:seed"); // chained from a1's output
+  expect(full.final_output).toBe(full.steps[1].output);
 });
 
 test("replying to a run without a session id throws", async () => {
