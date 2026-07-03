@@ -377,8 +377,19 @@ function resolveAgents(db: Database, task: Task): Agent[] {
   return [agent];
 }
 
-function buildSystem(agent: Agent): string {
-  return [agent.base_instruction, ...agent.skills.map((s) => s.body)]
+// Compose an agent's system prompt: its instruction files first (ENTRY leading,
+// then the rest in stored order), each headed by its filename so the model can
+// tell the pieces apart, followed by skill bodies as raw text. Empty-bodied
+// files drop out — an empty ENTRY (e.g. the freshly seeded Default agent)
+// contributes nothing, exactly as an empty base_instruction did before.
+export function buildSystem(agent: Agent): string {
+  const files = [...agent.instructions].sort(
+    (a, b) => Number(b.is_entry) - Number(a.is_entry) || a.position - b.position,
+  );
+  const blocks = files
+    .filter((f) => f.body.trim().length > 0)
+    .map((f) => `# ${f.name}\n${f.body}`);
+  return [...blocks, ...agent.skills.map((s) => s.body)]
     .filter((p) => p.trim().length > 0)
     .join("\n\n");
 }

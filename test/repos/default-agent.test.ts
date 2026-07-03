@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "../support";
 import { openDb } from "../../lib/db";
 import * as Agents from "../../lib/repos/agents";
 import * as Projects from "../../lib/repos/projects";
@@ -11,7 +12,14 @@ test("a Default agent is seeded, empty, adapterless, and marked is_default", () 
   const def = Agents.getDefaultAgent(db);
   expect(def.name).toBe("Default");
   expect(def.is_default).toBe(true);
-  expect(def.base_instruction).toBe("");
+  // Seeded with a single empty ENTRY file (migrated from its empty base instruction).
+  expect(
+    def.instructions.map((i) => ({
+      name: i.name,
+      body: i.body,
+      is_entry: i.is_entry,
+    })),
+  ).toEqual([{ name: "AGENTS.md", body: "", is_entry: true }]);
   expect(def.adapter_id).toBeNull();
 });
 
@@ -39,7 +47,7 @@ test("createAgent never marks a new agent as default", () => {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
   const a = Agents.createAgent(db, {
     name: "planner",
-    base_instruction: "",
+    instructions: entryFile(""),
     adapter_id: ad.id,
     model: "sonnet",
     effort: "off",
@@ -55,7 +63,7 @@ test("deleting a normal agent reassigns its tasks to the Default agent", () => {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
   const a = Agents.createAgent(db, {
     name: "planner",
-    base_instruction: "x",
+    instructions: entryFile("x"),
     adapter_id: ad.id,
     model: "sonnet",
     effort: "off",
@@ -98,7 +106,7 @@ test("updateAgent on the default keeps its name + is_default and ignores project
 
   Agents.updateAgent(db, def.id, {
     name: "Renamed", // ignored — stays "Default"
-    base_instruction: "hello",
+    instructions: entryFile("hello"),
     adapter_id: ad.id,
     model: "opus",
     effort: "high",
@@ -109,7 +117,7 @@ test("updateAgent on the default keeps its name + is_default and ignores project
   const got = Agents.getDefaultAgent(db);
   expect(got.name).toBe("Default");
   expect(got.is_default).toBe(true);
-  expect(got.base_instruction).toBe("hello");
+  expect(got.instructions.map((i) => i.body)).toEqual(["hello"]);
   expect(got.adapter_id).toBe(ad.id);
   expect(got.model).toBe("opus");
   expect(got.skills.map((x) => x.id)).toEqual([s.id]);

@@ -298,4 +298,30 @@ export const MIGRATIONS: string[][] = [
     `UPDATE tasks SET settled_at = updated_at, seen_at = updated_at
        WHERE status IN ('succeeded','failed','stopped')`,
   ],
+
+  // v11 — an agent's instructions become an ordered set of named files instead
+  // of one `base_instruction` blob. Each file has a name, a markdown body, a
+  // position, and an entry flag; exactly one file per agent is the ENTRY (it
+  // composes first). The partial unique index enforces one entry per agent,
+  // mirroring `agents_one_default`. Backfill turns every agent's existing
+  // base_instruction into a single ENTRY file named `AGENTS.md` (empty bodies
+  // included — e.g. the seeded Default agent), so nothing is lost. Then the now-
+  // dead column is dropped; DROP COLUMN is safe here because base_instruction is
+  // not part of any index or PK, so no table rebuild (v6/v8 style) is needed.
+  [
+    `CREATE TABLE agent_instructions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      position INTEGER NOT NULL,
+      is_entry INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(agent_id, name)
+    )`,
+    `CREATE UNIQUE INDEX agent_one_entry
+       ON agent_instructions(agent_id) WHERE is_entry = 1`,
+    `INSERT INTO agent_instructions (agent_id, name, body, position, is_entry)
+       SELECT id, 'AGENTS.md', base_instruction, 0, 1 FROM agents`,
+    `ALTER TABLE agents DROP COLUMN base_instruction`,
+  ],
 ];

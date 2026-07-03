@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "../support";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync, readFileSync } from "fs";
@@ -20,7 +21,7 @@ const SESSION = "bash test/fixtures/session-model.sh stream-json";
 function agent(db: any, name: string, adapterId: number) {
   return Agents.createAgent(db, {
     name,
-    base_instruction: name,
+    instructions: entryFile(name),
     adapter_id: adapterId,
     model: "opus",
     effort: "off",

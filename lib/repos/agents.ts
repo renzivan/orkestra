@@ -1,9 +1,19 @@
 import type { Database } from "bun:sqlite";
-import type { Agent, Project, Skill } from "../types";
+import type { Agent, AgentInstruction, Project, Skill } from "../types";
+
+/** One instruction file as supplied by a caller; position is the array index,
+ *  and exactly one element must have is_entry set. */
+export interface InstructionInput {
+  name: string;
+  body: string;
+  is_entry: boolean;
+}
 
 export interface AgentInput {
   name: string;
-  base_instruction: string;
+  /** Ordered instruction files. Must hold at least one file and exactly one
+   *  entry; array order becomes each file's stored position. */
+  instructions: InstructionInput[];
   adapter_id: number;
   model: string;
   effort: string;
@@ -16,7 +26,6 @@ export interface AgentInput {
 interface AgentRow {
   id: number;
   name: string;
-  base_instruction: string;
   adapter_id: number | null;
   model: string;
   effort: string;
@@ -26,17 +35,41 @@ interface AgentRow {
   updated_at: string;
 }
 
+/** Reject instruction sets the schema would accept as rows but that violate the
+ *  domain rules (at least one file, exactly one entry, unique non-empty names).
+ *  Thrown before any write so a bad set never partially lands. */
+function validateInstructions(instructions: InstructionInput[]): void {
+  if (instructions.length === 0) {
+    throw new Error("An agent needs at least one instruction file.");
+  }
+  const entries = instructions.filter((i) => i.is_entry).length;
+  if (entries !== 1) {
+    throw new Error("Exactly one instruction file must be the entry file.");
+  }
+  const seen = new Set<string>();
+  for (const i of instructions) {
+    const name = i.name.trim();
+    if (name.length === 0) {
+      throw new Error("Every instruction file needs a name.");
+    }
+    if (seen.has(name)) {
+      throw new Error(`Duplicate instruction file name: ${name}`);
+    }
+    seen.add(name);
+  }
+}
+
 export function createAgent(db: Database, input: AgentInput): Agent {
+  validateInstructions(input.instructions);
   const now = new Date().toISOString();
   const insert = db.transaction((i: AgentInput) => {
     const row = db
       .query(
-        `INSERT INTO agents (name, base_instruction, adapter_id, model, effort, skip_permissions, is_default, created_at, updated_at)
-         VALUES ($name, $base, $adapter, $model, $effort, $skip, 0, $now, $now) RETURNING id`,
+        `INSERT INTO agents (name, adapter_id, model, effort, skip_permissions, is_default, created_at, updated_at)
+         VALUES ($name, $adapter, $model, $effort, $skip, 0, $now, $now) RETURNING id`,
       )
       .get({
         $name: i.name,
-        $base: i.base_instruction,
         $adapter: i.adapter_id,
         $model: i.model,
         $effort: i.effort,
@@ -55,21 +88,22 @@ export function updateAgent(
   id: number,
   input: AgentInput,
 ): Agent {
+  validateInstructions(input.instructions);
   const now = new Date().toISOString();
   // The Default agent's name is locked and its projects are always "all", so
-  // ignore any name/project_ids a (possibly stale) caller sends for it.
+  // ignore any name/project_ids a (possibly stale) caller sends for it. Its
+  // instructions are still editable like any other agent's.
   const isDefault = isDefaultAgent(db, id);
   const tx = db.transaction((i: AgentInput) => {
     const res = db
       .query(
-        `UPDATE agents SET name = $name, base_instruction = $base,
+        `UPDATE agents SET name = $name,
            adapter_id = $adapter, model = $model, effort = $effort,
            skip_permissions = $skip, updated_at = $now WHERE id = $id`,
       )
       .run({
         $id: id,
         $name: isDefault ? "Default" : i.name,
-        $base: i.base_instruction,
         $adapter: i.adapter_id,
         $model: i.model,
         $effort: i.effort,
@@ -79,6 +113,7 @@ export function updateAgent(
     if (res.changes === 0) throw new Error(`agent ${id} not found`);
     db.query("DELETE FROM agent_skills WHERE agent_id = ?").run(id);
     db.query("DELETE FROM agent_projects WHERE agent_id = ?").run(id);
+    db.query("DELETE FROM agent_instructions WHERE agent_id = ?").run(id);
     writeRelations(db, id, isDefault ? { ...i, project_ids: [] } : i);
   });
   tx(input);
@@ -86,6 +121,19 @@ export function updateAgent(
 }
 
 function writeRelations(db: Database, agentId: number, input: AgentInput): void {
+  const instrStmt = db.query(
+    `INSERT INTO agent_instructions (agent_id, name, body, position, is_entry)
+     VALUES ($a, $name, $body, $pos, $entry)`,
+  );
+  input.instructions.forEach((instr, pos) => {
+    instrStmt.run({
+      $a: agentId,
+      $name: instr.name.trim(),
+      $body: instr.body,
+      $pos: pos,
+      $entry: instr.is_entry ? 1 : 0,
+    });
+  });
   const skillStmt = db.query(
     `INSERT INTO agent_skills (agent_id, skill_id, position)
      VALUES ($a, $s, $pos)`,
@@ -112,6 +160,17 @@ export function getAgent(db: Database, id: number): Agent | null {
   const row =
     (db.query("SELECT * FROM agents WHERE id = ?").get(id) as AgentRow) ?? null;
   if (!row) return null;
+
+  const instructionRows = db
+    .query(
+      `SELECT id, name, body, position, is_entry FROM agent_instructions
+       WHERE agent_id = ? ORDER BY position`,
+    )
+    .all(id) as (Omit<AgentInstruction, "is_entry"> & { is_entry: number })[];
+  const instructions: AgentInstruction[] = instructionRows.map((r) => ({
+    ...r,
+    is_entry: r.is_entry === 1,
+  }));
 
   const skills = db
     .query(
@@ -141,6 +200,7 @@ export function getAgent(db: Database, id: number): Agent | null {
     ...row,
     skip_permissions: row.skip_permissions === 1,
     is_default: row.is_default === 1,
+    instructions,
     skills,
     projects,
   };

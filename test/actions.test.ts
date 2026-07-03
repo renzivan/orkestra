@@ -1,4 +1,5 @@
 import { expect, test, beforeEach } from "bun:test";
+import { entryFile } from "./support";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
@@ -31,7 +32,7 @@ test("create + run a single-agent task reaches succeeded", async () => {
   });
   const agent = await A.saveAgent({
     name: "solo",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
@@ -66,7 +67,7 @@ test("deleting a referenced skill succeeds and drops it from the agent", async (
   const skill = await A.saveSkill({ name: "plan", body: "plan" });
   const agent = await A.saveAgent({
     name: "a",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
@@ -89,7 +90,7 @@ test("deleting a target agent reassigns its task to the Default agent", async ()
   const ad = Adapters.createAdapter(db(), { name: "echo", command: "c {input}" });
   const agent = await A.saveAgent({
     name: "a",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",

@@ -258,6 +258,34 @@ a:hover {
   margin: var(--s-1) 0 0;
 }
 
+/* ---------- tabs ---------- */
+.tabs {
+  display: flex;
+  gap: var(--s-4);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s-3);
+}
+.tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: var(--s-2) 2px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--fg);
+}
+.tab.active {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
 /* ---------- components ---------- */
 .card {
   background: var(--panel);

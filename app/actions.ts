@@ -122,7 +122,7 @@ export async function pickDirectory(): Promise<{ path: string | null }> {
 export async function saveAgent(input: {
   id?: number;
   name: string;
-  base_instruction: string;
+  instructions: { name: string; body: string; is_entry: boolean }[];
   adapter_id: number;
   model: string;
   effort: string;

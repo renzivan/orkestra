@@ -6,6 +6,16 @@ export interface Skill {
   updated_at: string;
 }
 
+/** One named instruction file belonging to an agent. Exactly one of an agent's
+ *  files is the ENTRY (it composes first). See buildSystem in the engine. */
+export interface AgentInstruction {
+  id: number;
+  name: string;
+  body: string;
+  position: number;
+  is_entry: boolean;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -25,7 +35,10 @@ export interface Adapter {
 export interface Agent {
   id: number;
   name: string;
-  base_instruction: string;
+  /** Ordered instruction files (see AgentInstruction). Exactly one is the ENTRY.
+   *  Replaces the former single base_instruction; composed into the system
+   *  prompt ENTRY-first by buildSystem. */
+  instructions: AgentInstruction[];
   /** null when the adapter was deleted — agent is non-runnable until reassigned. */
   adapter_id: number | null;
   model: string;

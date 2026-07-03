@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "../support";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync, readFileSync } from "fs";
@@ -17,7 +18,7 @@ const ECHO = "bash test/fixtures/echo-model.sh";
 function agent(db: any, name: string, adapterId: number) {
   return Agents.createAgent(db, {
     name,
-    base_instruction: name,
+    instructions: entryFile(name),
     adapter_id: adapterId,
     model: "opus",
     effort: "off",

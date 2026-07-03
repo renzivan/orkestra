@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "./support";
 import { openDb } from "../lib/db";
 import * as Adapters from "../lib/repos/adapters";
 import * as Agents from "../lib/repos/agents";
@@ -59,7 +60,7 @@ test("an uninstalled but referenced adapter is kept", () => {
   const codex = Adapters.listAdapters(db).find((a) => a.name === "codex")!;
   Agents.createAgent(db, {
     name: "user-of-codex",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: codex.id,
     model: "gpt",
     effort: "off",

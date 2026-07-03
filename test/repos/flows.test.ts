@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "../support";
 import { openDb } from "../../lib/db";
 import * as Skills from "../../lib/repos/skills";
 import * as Adapters from "../../lib/repos/adapters";
@@ -9,7 +10,7 @@ function twoAgents(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "claude {input}" });
   const a1 = Agents.createAgent(db, {
     name: "a1",
-    base_instruction: "one",
+    instructions: entryFile("one"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
@@ -18,7 +19,7 @@ function twoAgents(db: ReturnType<typeof openDb>) {
   });
   const a2 = Agents.createAgent(db, {
     name: "a2",
-    base_instruction: "two",
+    instructions: entryFile("two"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",

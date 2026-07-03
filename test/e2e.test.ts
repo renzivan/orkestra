@@ -1,4 +1,5 @@
 import { expect, test, beforeEach } from "bun:test";
+import { entryFile } from "./support";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
@@ -29,7 +30,7 @@ test("end to end: build a flow via actions, run a task, chain succeeds", async (
   });
   const a1 = await A.saveAgent({
     name: "first",
-    base_instruction: "one",
+    instructions: entryFile("one"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
@@ -38,7 +39,7 @@ test("end to end: build a flow via actions, run a task, chain succeeds", async (
   });
   const a2 = await A.saveAgent({
     name: "second",
-    base_instruction: "two",
+    instructions: entryFile("two"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",

@@ -122,11 +122,30 @@ test("v8 upgrades an existing v7 database, preserving rows", () => {
   expect((db.query("SELECT * FROM agent_projects").all() as any[]).length).toBe(1);
   expect((db.query("SELECT * FROM flow_steps").all() as any[]).length).toBe(1);
 
+  // v11 migrated the old base_instruction into a single ENTRY file and dropped
+  // the column.
+  expect(agent.base_instruction).toBeUndefined();
+  const instr: any = db
+    .query("SELECT * FROM agent_instructions WHERE agent_id = 1")
+    .get();
+  expect(instr.name).toBe("AGENTS.md");
+  expect(instr.body).toBe("b");
+  expect(instr.is_entry).toBe(1);
+  expect(instr.position).toBe(0);
+
   // New cascade behaviour is live after the upgrade.
   db.query("DELETE FROM adapters WHERE id=1").run();
   expect((db.query("SELECT adapter_id FROM agents WHERE id=1").get() as any).adapter_id).toBeNull();
   db.query("DELETE FROM agents WHERE id=1").run();
   expect((db.query("SELECT * FROM flow_steps").all() as any[]).length).toBe(0);
+  // Agent 1's instruction rows cascade with it (the seeded Default agent keeps its own).
+  expect(
+    (
+      db
+        .query("SELECT COUNT(*) AS n FROM agent_instructions WHERE agent_id = 1")
+        .get() as { n: number }
+    ).n,
+  ).toBe(0);
   db.close();
   for (const ext of ["", "-wal", "-shm"]) {
     if (existsSync(file + ext)) rmSync(file + ext);

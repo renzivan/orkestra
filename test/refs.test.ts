@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "./support";
 import { openDb } from "../lib/db";
 import * as Skills from "../lib/repos/skills";
 import * as Projects from "../lib/repos/projects";
@@ -13,7 +14,7 @@ function fixtures(db: ReturnType<typeof openDb>) {
   const p = Projects.createProject(db, { name: "app", path: "/app" });
   const a = Agents.createAgent(db, {
     name: "agent",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
@@ -61,7 +62,7 @@ test("deleting an agent drops its flow steps; the flow shrinks", () => {
   const { a, f } = fixtures(db);
   const b = Agents.createAgent(db, {
     name: "second",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: fixturesAdapterId(db),
     model: "opus",
     effort: "off",

@@ -1,4 +1,5 @@
 import { expect, test, beforeEach } from "bun:test";
+import { entryFile } from "./support";
 import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
@@ -49,7 +50,7 @@ test("stream replays a finished run and emits a done event", async () => {
   });
   const a = Agents.createAgent(db(), {
     name: "solo",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",

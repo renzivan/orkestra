@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { entryFile } from "./support";
 import { openDb } from "../lib/db";
 import * as Adapters from "../lib/repos/adapters";
 import * as Agents from "../lib/repos/agents";
@@ -10,7 +11,7 @@ function setup(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
   const a = Agents.createAgent(db, {
     name: "agent",
-    base_instruction: "b",
+    instructions: entryFile("b"),
     adapter_id: ad.id,
     model: "opus",
     effort: "off",
