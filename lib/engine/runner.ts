@@ -21,6 +21,7 @@ import {
   setProc,
   clearProc,
   isAborted,
+  abortIntent,
 } from "./registry";
 
 // Every task status change in the runner (start, settle) also pings the tasks
@@ -284,20 +285,22 @@ async function executeStep(
   clearProc(runId);
   if (sessionId) Runs.setStepSession(db, stepId, sessionId);
 
-  // A user stop killed the process — record the step as stopped (not failed)
-  // and let the caller wind the run down. The abort flag, not the exit code, is
-  // the source of truth: a killed CLI exits non-zero but that isn't a failure.
+  // A user halt killed the process — record the step as paused or stopped (not
+  // failed) per the halt intent, and let the caller wind the run down. The abort
+  // flag, not the exit code, is the source of truth: a killed CLI exits non-zero
+  // but that isn't a failure.
   if (isAborted(runId)) {
+    const status = abortIntent(runId) === "pause" ? "paused" : "stopped";
     Runs.finishRunStep(db, stepId, {
       output: result.stdout,
       exit_code: result.exitCode,
       error: null,
-      status: "stopped",
+      status,
     });
     publish(runId, {
       type: "step_done",
       position: pos,
-      status: "stopped",
+      status,
       exit_code: result.exitCode,
     });
     return { ok: false, stopped: true };
@@ -348,21 +351,19 @@ function fail(
   return Runs.getRunWithSteps(db, runId);
 }
 
-/** Wind a run down after a user stop: mark the run and task stopped. The
- *  interrupted step was already marked stopped by executeStep (if one was
- *  mid-flight); a stop between steps simply leaves earlier steps intact. */
+/** Wind a run down after a user halt: mark the run and task paused or stopped to
+ *  match the halt intent. The interrupted step (if one was mid-flight) was
+ *  already marked to match by executeStep; a halt between steps leaves earlier
+ *  steps intact. */
 function stopRun(
   db: Database,
   runId: number,
   taskId: number,
 ): Runs.RunWithSteps {
-  Runs.finishRun(db, runId, {
-    status: "stopped",
-    final_output: null,
-    error: null,
-  });
-  setTaskStatus(db, taskId, "stopped");
-  publish(runId, { type: "done", status: "stopped" });
+  const status = abortIntent(runId) === "pause" ? "paused" : "stopped";
+  Runs.finishRun(db, runId, { status, final_output: null, error: null });
+  setTaskStatus(db, taskId, status);
+  publish(runId, { type: "done", status });
   return Runs.getRunWithSteps(db, runId);
 }
 

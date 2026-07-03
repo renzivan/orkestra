@@ -10,7 +10,7 @@ import * as Tasks from "../../lib/repos/tasks";
 import * as Runs from "../../lib/repos/runs";
 import * as Settings from "../../lib/repos/settings";
 import { runTask, resumeRun } from "../../lib/engine/runner";
-import { stop } from "../../lib/engine/registry";
+import { stop, pause } from "../../lib/engine/registry";
 
 const ECHO = "bash test/fixtures/echo-model.sh";
 
@@ -73,6 +73,67 @@ test("stopping a running task marks it stopped and does not retry", async () => 
   rmSync(counter);
 });
 
+test("pausing a running task winds the run down to 'paused'", async () => {
+  const db = openDb(":memory:");
+  const counter = join(tmpdir(), `ork-pause-${process.pid}-${Date.now()}`);
+  if (existsSync(counter)) rmSync(counter);
+
+  const sleepy = Adapters.createAdapter(db, {
+    name: "sleep",
+    command: `bash test/fixtures/sleep-model.sh ${counter}`,
+  });
+  const a = agent(db, "blocker", sleepy.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const p = runTask(db, t.id); // don't await — blocks in the sleeping step
+  const run = Runs.latestRunForTask(db, t.id)!;
+  await waitFor(() => existsSync(counter));
+
+  pause(run.id);
+  const finished = await p;
+
+  expect(finished.status).toBe("paused");
+  expect(Tasks.getTask(db, t.id)!.status).toBe("paused");
+  const full = Runs.getRunWithSteps(db, run.id);
+  expect(full.steps[0].status).toBe("paused"); // interrupted step is resumable
+  rmSync(counter);
+});
+
+test("stopping a running task winds the run down to 'stopped'", async () => {
+  const db = openDb(":memory:");
+  const counter = join(tmpdir(), `ork-stopd-${process.pid}-${Date.now()}`);
+  if (existsSync(counter)) rmSync(counter);
+
+  const sleepy = Adapters.createAdapter(db, {
+    name: "sleep",
+    command: `bash test/fixtures/sleep-model.sh ${counter}`,
+  });
+  const a = agent(db, "blocker", sleepy.id);
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const p = runTask(db, t.id);
+  const run = Runs.latestRunForTask(db, t.id)!;
+  await waitFor(() => existsSync(counter));
+
+  stop(run.id);
+  const finished = await p;
+
+  expect(finished.status).toBe("stopped");
+  expect(Tasks.getTask(db, t.id)!.status).toBe("stopped");
+  expect(Runs.getRunWithSteps(db, run.id).steps[0].status).toBe("stopped");
+  rmSync(counter);
+});
+
 test("resume keeps the interrupted step and appends its continuation", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
@@ -90,26 +151,26 @@ test("resume keeps the interrupted step and appends its continuation", async () 
   expect(run.status).toBe("succeeded");
   const step0Output = Runs.getRunWithSteps(db, run.id).steps[0].output;
 
-  // Simulate a stop at the second step: step 0 stayed succeeded, step 1 stopped.
+  // Simulate a pause at the second step: step 0 stayed succeeded, step 1 paused.
   const now = new Date().toISOString();
-  db.query("UPDATE runs SET status='stopped', finished_at=$n WHERE id=$id").run({
+  db.query("UPDATE runs SET status='paused', finished_at=$n WHERE id=$id").run({
     $id: run.id,
     $n: now,
   });
   db.query(
-    "UPDATE run_steps SET status='stopped' WHERE run_id=$r AND position=1",
+    "UPDATE run_steps SET status='paused' WHERE run_id=$r AND position=1",
   ).run({ $r: run.id });
-  Tasks.setTaskStatus(db, t.id, "stopped");
+  Tasks.setTaskStatus(db, t.id, "paused");
 
   const resumed = await resumeRun(db, run.id);
 
   expect(resumed.status).toBe("succeeded");
   expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
-  // step 0 (succeeded) + step 1 (stopped, preserved) + continuation appended.
+  // step 0 (succeeded) + step 1 (paused, preserved) + continuation appended.
   expect(full.steps.length).toBe(3);
   expect(full.steps[0].status).toBe("succeeded");
-  expect(full.steps[1].status).toBe("stopped"); // interrupted step kept on screen
+  expect(full.steps[1].status).toBe("paused"); // interrupted step kept on screen
   expect(full.steps[2].status).toBe("succeeded"); // continuation of a2
   expect(full.steps[2].agent_name).toBe("a2");
   // The continuation re-sends the interrupted step's own input (step 0's output).
@@ -130,19 +191,19 @@ test("resume of a single-agent task keeps step 0 and continues from the task bod
 
   const run = await runTask(db, t.id);
   const now = new Date().toISOString();
-  db.query("UPDATE runs SET status='stopped', finished_at=$n WHERE id=$id").run({
+  db.query("UPDATE runs SET status='paused', finished_at=$n WHERE id=$id").run({
     $id: run.id,
     $n: now,
   });
   db.query(
-    "UPDATE run_steps SET status='stopped' WHERE run_id=$r AND position=0",
+    "UPDATE run_steps SET status='paused' WHERE run_id=$r AND position=0",
   ).run({ $r: run.id });
-  Tasks.setTaskStatus(db, t.id, "stopped");
+  Tasks.setTaskStatus(db, t.id, "paused");
 
   const resumed = await resumeRun(db, run.id);
   expect(resumed.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
-  expect(full.steps.length).toBe(2); // stopped step kept, continuation appended
-  expect(full.steps[0].status).toBe("stopped");
+  expect(full.steps.length).toBe(2); // paused step kept, continuation appended
+  expect(full.steps[0].status).toBe("paused");
   expect(full.steps[1].input).toBe("hello"); // continued from task.body
 });

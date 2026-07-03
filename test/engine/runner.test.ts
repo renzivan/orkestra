@@ -126,9 +126,9 @@ test("captures session id and replies resume the run with a new step", async () 
   expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
 });
 
-// Seed a run whose single step was killed mid-flight (status 'stopped'),
+// Seed a run whose single step was killed mid-flight (status 'paused'),
 // optionally after capturing a CLI session id + partial transcript.
-function seedStoppedRun(
+function seedPausedRun(
   db: any,
   taskId: number,
   a: { id: number; name: string },
@@ -148,10 +148,10 @@ function seedStoppedRun(
     output: "",
     exit_code: 143,
     error: null,
-    status: "stopped",
+    status: "paused",
   });
   Runs.finishRun(db, run.id, {
-    status: "stopped",
+    status: "paused",
     final_output: null,
     error: null,
   });
@@ -172,7 +172,7 @@ test("resuming a stopped step keeps it and appends a --resume continuation", asy
   // The interrupted step captured a session id (Claude adapters emit one before
   // the SIGTERM lands) and some partial transcript the user was watching.
   const partial = JSON.stringify([{ kind: "text", text: "partial work" }]);
-  const run = seedStoppedRun(db, t.id, a, t.body, {
+  const run = seedPausedRun(db, t.id, a, t.body, {
     session: "sess-123",
     transcript: partial,
   });
@@ -181,10 +181,10 @@ test("resuming a stopped step keeps it and appends a --resume continuation", asy
 
   expect(resumed.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
-  // The stopped step is preserved (its transcript stays on screen) and a
+  // The paused step is preserved (its transcript stays on screen) and a
   // continuation is appended — not a wiped, single re-run.
   expect(full.steps.length).toBe(2);
-  expect(full.steps[0].status).toBe("stopped");
+  expect(full.steps[0].status).toBe("paused");
   expect(full.steps[0].transcript).toContain("partial work");
   expect(full.steps[1].position).toBe(1);
   expect(full.steps[1].input).toBe("hi"); // re-sends the original input
@@ -206,14 +206,14 @@ test("resuming a stopped step with no session falls back to a fresh continuation
   });
 
   // No session captured — a non-Claude adapter, or a kill before one emitted.
-  const run = seedStoppedRun(db, t.id, a, t.body);
+  const run = seedPausedRun(db, t.id, a, t.body);
 
   const resumed = await resumeRun(db, run.id);
 
   expect(resumed.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
   expect(full.steps.length).toBe(2);
-  expect(full.steps[0].status).toBe("stopped"); // still preserved
+  expect(full.steps[0].status).toBe("paused"); // still preserved
   expect(full.steps[1].output).toBe("fresh:hi"); // no --resume flag passed
 });
 
