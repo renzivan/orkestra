@@ -122,7 +122,7 @@ test("v8 upgrades an existing v7 database, preserving rows", () => {
   expect((db.query("SELECT * FROM agent_projects").all() as any[]).length).toBe(1);
   expect((db.query("SELECT * FROM flow_steps").all() as any[]).length).toBe(1);
 
-  // v11 migrated the old base_instruction into a single ENTRY file and dropped
+  // v12 migrated the old base_instruction into a single ENTRY file and dropped
   // the column.
   expect(agent.base_instruction).toBeUndefined();
   const instr: any = db
