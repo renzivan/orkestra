@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import {
   register,
+  pause,
   setProc,
   clearProc,
   stop,
   isAborted,
+  abortIntent,
   unregister,
 } from "../../lib/engine/registry";
 
@@ -60,4 +62,27 @@ test("clearProc detaches the handle so a later stop kills nothing", async () => 
 
 test("isAborted is false for an unregistered run", () => {
   expect(isAborted(987654)).toBe(false);
+});
+
+test("pause and stop record distinct intents; register resets", () => {
+  register(1);
+  expect(isAborted(1)).toBe(false);
+  expect(abortIntent(1)).toBeNull();
+
+  pause(1);
+  expect(isAborted(1)).toBe(true);
+  expect(abortIntent(1)).toBe("pause");
+
+  register(2);
+  stop(2);
+  expect(isAborted(2)).toBe(true);
+  expect(abortIntent(2)).toBe("stop");
+
+  // Reusing a run id (a resume re-registers) clears the prior intent.
+  register(1);
+  expect(isAborted(1)).toBe(false);
+  expect(abortIntent(1)).toBeNull();
+
+  unregister(1);
+  unregister(2);
 });
