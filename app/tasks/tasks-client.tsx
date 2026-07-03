@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import type { Task, TargetType, TaskStatus } from "@/lib/types";
 import type { Runnable } from "@/lib/runnable";
 import { taskLabel, taskDeleteMessage, isTaskUnread } from "@/lib/repos/tasks";
-import { createTaskAction, runTaskAction, deleteTaskAction } from "../actions";
+import {
+  createTaskAction,
+  runTaskAction,
+  resumeTaskAction,
+  deleteTaskAction,
+} from "../actions";
 import { useConfirm } from "../confirm-dialog";
 
 interface Named {
@@ -19,6 +24,9 @@ interface Named {
 const COLUMNS: { status: TaskStatus; label: string }[] = [
   { status: "pending", label: "Pending" },
   { status: "running", label: "Running" },
+  // Paused sits between Running and the terminal columns: a halted run the user
+  // means to continue (Resume), distinct from the terminal Stopped.
+  { status: "paused", label: "Paused" },
   { status: "succeeded", label: "Succeeded" },
   { status: "failed", label: "Failed" },
   { status: "stopped", label: "Stopped" },
@@ -82,6 +90,18 @@ export function TasksClient({
   function runById(id: number) {
     const t = tasks.find((x) => x.id === id);
     if (t) void run(t);
+  }
+
+  // Resume a paused task's latest run (warm --resume continuation), then jump to
+  // the detail view where it streams live — the paused counterpart of `run`.
+  async function resume(t: Task) {
+    setError("");
+    const res = await resumeTaskAction(t.id);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    router.push(`/tasks/${t.id}`);
   }
 
   async function remove(t: Task) {
@@ -167,6 +187,7 @@ export function TasksClient({
                     dragging={draggingId === t.id}
                     deleting={deletingId === t.id}
                     onRun={() => run(t)}
+                    onResume={() => resume(t)}
                     onDelete={() => remove(t)}
                     onDragStart={() => setDraggingId(t.id)}
                     onDragEnd={() => setDraggingId(null)}
@@ -251,6 +272,7 @@ function TaskCard({
   dragging,
   deleting,
   onRun,
+  onResume,
   onDelete,
   onDragStart,
   onDragEnd,
@@ -266,6 +288,7 @@ function TaskCard({
   dragging: boolean;
   deleting: boolean;
   onRun: () => void;
+  onResume: () => void;
   onDelete: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -294,14 +317,26 @@ function TaskCard({
         <div className="task-card-reason muted">can’t run: {reason}</div>
       )}
       <div className="task-card-actions">
-        <button
-          className="btn small primary"
-          onClick={onRun}
-          disabled={task.status === "running" || blocked}
-          title={blocked ? reason : undefined}
-        >
-          {task.status === "running" ? "Running…" : task.status === "pending" ? "Run" : "Re-run"}
-        </button>
+        {task.status === "paused" ? (
+          // Paused pairs with Resume (warm continuation), never a fresh Re-run.
+          <button
+            className="btn small primary"
+            onClick={onResume}
+            disabled={blocked}
+            title={blocked ? reason : undefined}
+          >
+            Resume
+          </button>
+        ) : (
+          <button
+            className="btn small primary"
+            onClick={onRun}
+            disabled={task.status === "running" || blocked}
+            title={blocked ? reason : undefined}
+          >
+            {task.status === "running" ? "Running…" : task.status === "pending" ? "Run" : "Re-run"}
+          </button>
+        )}
         <Link className="btn small" href={`/tasks/${task.id}`}>
           View
         </Link>

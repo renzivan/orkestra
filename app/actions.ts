@@ -250,11 +250,26 @@ export async function markTaskSeenAction(id: number): Promise<{ ok: true }> {
   return { ok: true };
 }
 
-/** Resume a stopped run: re-run from its interrupted step, keeping prior work. */
+/** Resume a paused run: continue from its interrupted step (--resume), keeping
+ *  prior work. */
 export async function resumeRunAction(runId: number): Promise<{ ok: true }> {
   // resumeRun reopens the run + resets the step synchronously before its first
   // await, so a refresh right after this sees the run 'running'.
   void resumeRun(db(), runId).catch(() => {
+    /* failure is persisted on the run/task by resumeRun itself */
+  });
+  revalidate("/tasks");
+  return { ok: true };
+}
+
+/** Resume a task from the board by resolving its latest run, then resuming that.
+ *  Lets a paused card offer Resume without the board tracking run ids. */
+export async function resumeTaskAction(
+  taskId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const latest = latestRunForTask(db(), taskId);
+  if (!latest) return { ok: false, error: "no run to resume" };
+  void resumeRun(db(), latest.id).catch(() => {
     /* failure is persisted on the run/task by resumeRun itself */
   });
   revalidate("/tasks");
