@@ -123,3 +123,19 @@ test("countUnreadTasks re-arms after a fresh settle following a prior seen", asy
   Tasks.setTaskStatus(db, task.id, "succeeded");
   expect(Tasks.countUnreadTasks(db)).toBe(1);
 });
+
+test("pausing a task does not stamp settled_at or count as unread", () => {
+  const db = openDb(":memory:");
+  const t = Tasks.createTask(db, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: 1,
+  });
+  Tasks.setTaskStatus(db, t.id, "paused");
+  const paused = Tasks.getTask(db, t.id)!;
+  expect(paused.status).toBe("paused");
+  expect(paused.settled_at).toBeNull(); // silent: no settle stamp
+  expect(Tasks.isTaskUnread(paused)).toBe(false);
+  expect(Tasks.countUnreadTasks(db)).toBe(0);
+});
