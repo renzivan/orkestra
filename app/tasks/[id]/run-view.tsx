@@ -282,9 +282,16 @@ export function RunView({
 
       {stepList.map((s, i) => {
         // A step whose input isn't the previous turn's answer is a user reply
-        // (vs a flow handing one agent's output to the next).
+        // (vs a flow handing one agent's output to the next). A resume
+        // continuation is neither: it re-sends the interrupted step's own input
+        // to pick up where it stopped, so don't render that as a user bubble.
         const prev = i > 0 ? stepList[i - 1] : null;
-        const isReply = prev != null && s.input !== answerText(prev.entries);
+        const isResumeContinuation =
+          prev != null && prev.status === "stopped" && s.input === prev.input;
+        const isReply =
+          prev != null &&
+          s.input !== answerText(prev.entries) &&
+          !isResumeContinuation;
         return (
           <div key={s.position} className="turn">
             {isReply && <Msg role="user">{s.input}</Msg>}

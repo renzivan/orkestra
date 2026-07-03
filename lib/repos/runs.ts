@@ -119,21 +119,6 @@ export function reopenRun(db: Database, id: number): void {
 }
 
 /**
- * Delete a run's steps at `position` and beyond. Used to resume a stopped run:
- * the interrupted step (and anything after it) is removed so it can be re-run
- * fresh, while completed earlier steps are kept.
- */
-export function deleteStepsFrom(
-  db: Database,
-  runId: number,
-  position: number,
-): void {
-  db.query(
-    "DELETE FROM run_steps WHERE run_id = $r AND position >= $p",
-  ).run({ $r: runId, $p: position });
-}
-
-/**
  * Mark any run/step/task left in 'running' as failed. Called on startup so a
  * process that crashed mid-run doesn't leave rows stuck forever.
  */

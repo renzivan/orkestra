@@ -73,7 +73,7 @@ test("stopping a running task marks it stopped and does not retry", async () => 
   rmSync(counter);
 });
 
-test("resume re-runs the stopped step, keeping completed prior steps", async () => {
+test("resume keeps the interrupted step and appends its continuation", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "a1", m.id);
@@ -106,15 +106,18 @@ test("resume re-runs the stopped step, keeping completed prior steps", async () 
   expect(resumed.status).toBe("succeeded");
   expect(Tasks.getTask(db, t.id)!.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
-  expect(full.steps.length).toBe(2); // no duplicate step rows
+  // step 0 (succeeded) + step 1 (stopped, preserved) + continuation appended.
+  expect(full.steps.length).toBe(3);
   expect(full.steps[0].status).toBe("succeeded");
-  expect(full.steps[1].status).toBe("succeeded");
-  // Step 1 re-ran fresh, chaining step 0's output as its input.
-  expect(full.steps[1].input).toBe(step0Output);
-  expect(full.final_output).toBe(full.steps[1].output);
+  expect(full.steps[1].status).toBe("stopped"); // interrupted step kept on screen
+  expect(full.steps[2].status).toBe("succeeded"); // continuation of a2
+  expect(full.steps[2].agent_name).toBe("a2");
+  // The continuation re-sends the interrupted step's own input (step 0's output).
+  expect(full.steps[2].input).toBe(step0Output);
+  expect(full.final_output).toBe(full.steps[2].output);
 });
 
-test("resume of a single-agent task re-runs step 0 from the task body", async () => {
+test("resume of a single-agent task keeps step 0 and continues from the task body", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
@@ -139,6 +142,7 @@ test("resume of a single-agent task re-runs step 0 from the task body", async ()
   const resumed = await resumeRun(db, run.id);
   expect(resumed.status).toBe("succeeded");
   const full = Runs.getRunWithSteps(db, run.id);
-  expect(full.steps.length).toBe(1);
-  expect(full.steps[0].input).toBe("hello"); // re-ran from task.body
+  expect(full.steps.length).toBe(2); // stopped step kept, continuation appended
+  expect(full.steps[0].status).toBe("stopped");
+  expect(full.steps[1].input).toBe("hello"); // continued from task.body
 });
