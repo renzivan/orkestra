@@ -55,8 +55,14 @@ export type TaskStatus =
   | "running"
   | "succeeded"
   | "failed"
-  | "stopped";
-export type RunStatus = "running" | "succeeded" | "failed" | "stopped";
+  | "stopped"
+  | "paused";
+export type RunStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "stopped"
+  | "paused";
 
 export interface Task {
   id: number;
