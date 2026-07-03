@@ -10,7 +10,7 @@ import * as Tasks from "@/lib/repos/tasks";
 import { latestRunForTask } from "@/lib/repos/runs";
 import * as Settings from "@/lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
-import { stop } from "@/lib/engine/registry";
+import { stop, pause } from "@/lib/engine/registry";
 import { referencesTo, type RefKind } from "@/lib/refs";
 import { taskRunnable } from "@/lib/runnable";
 import type { Ref, Settings as SettingsT, TargetType } from "@/lib/types";
@@ -224,8 +224,18 @@ export async function replyToRunAction(
   return { ok: true };
 }
 
-/** Stop a running run: flag it aborted and kill its live process. The runner
- *  transitions the run/task to 'stopped' and publishes the terminal event. */
+/** Pause a running run: halt it now but keep it resumable. The runner transitions
+ *  the run/task to 'paused', preserves the interrupted step + its session, and
+ *  publishes the terminal event; Resume continues it with --resume. */
+export async function pauseRunAction(runId: number): Promise<{ ok: true }> {
+  pause(runId);
+  revalidate("/tasks");
+  return { ok: true };
+}
+
+/** Stop a running run terminally: flag it aborted and kill its live process. The
+ *  runner transitions the run/task to 'stopped'; the run stays as history and
+ *  only Re-run (a fresh run) is offered. */
 export async function stopRunAction(runId: number): Promise<{ ok: true }> {
   stop(runId);
   revalidate("/tasks");
