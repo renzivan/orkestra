@@ -24,6 +24,10 @@ _Avoid_: Ability, tool, plugin
 A concrete local working target an agent operates on — typically a directory/codebase on disk.
 _Avoid_: Workspace, repo, folder
 
+**Space**:
+The top-level isolation container that holds everything: its own Projects, Tasks, Flows, Agents, Skills, and Settings, fully separated from every other Space (e.g. one for personal, one for work). Backed by a single database — a Space is a scope (a `space_id` on each top-level entity), not a separate file. The active Space is a view scope only: switching Spaces changes what you see, while work already running in another Space keeps going. Adapters are detected from PATH and shared across all Spaces.
+_Avoid_: Workspace (still reserved — it is a banned synonym for Project), Tenant, Account
+
 **Flow**:
 An ordered, linear pipeline of agents. Each agent runs in turn; its output feeds the next agent's input.
 _Avoid_: Pipeline, chain, workflow, graph

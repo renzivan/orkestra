@@ -6,21 +6,30 @@ export interface SkillInput {
   body: string;
 }
 
-export function createSkill(db: Database, input: SkillInput): Skill {
+export function createSkill(
+  db: Database,
+  spaceId: number,
+  input: SkillInput,
+): Skill {
   const now = new Date().toISOString();
   const row = db
     .query(
-      `INSERT INTO skills (name, body, created_at, updated_at)
-       VALUES ($name, $body, $now, $now) RETURNING *`,
+      `INSERT INTO skills (name, body, space_id, created_at, updated_at)
+       VALUES ($name, $body, $space, $now, $now) RETURNING *`,
     )
-    .get({ $name: input.name, $body: input.body, $now: now }) as Skill;
+    .get({
+      $name: input.name,
+      $body: input.body,
+      $space: spaceId,
+      $now: now,
+    }) as Skill;
   return row;
 }
 
-export function listSkills(db: Database): Skill[] {
+export function listSkills(db: Database, spaceId: number): Skill[] {
   return db
-    .query("SELECT * FROM skills ORDER BY name COLLATE NOCASE")
-    .all() as Skill[];
+    .query("SELECT * FROM skills WHERE space_id = ? ORDER BY name COLLATE NOCASE")
+    .all(spaceId) as Skill[];
 }
 
 export function getSkill(db: Database, id: number): Skill | null {

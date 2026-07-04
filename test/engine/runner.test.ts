@@ -13,6 +13,8 @@ import * as Settings from "../../lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "../../lib/engine/runner";
 import { subscribeTasks } from "../../lib/engine/bus";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const ECHO = "bash test/fixtures/echo-model.sh";
 // Emits a stable session_id + echoes stdin; "stream-json" in the command makes
 // the runner parse it as Claude output (so session capture kicks in).
@@ -23,7 +25,7 @@ const RESUME =
   "bash test/fixtures/resume-model.sh stream-json {resume:--resume}";
 
 function agent(db: any, name: string, adapterId: number) {
-  return Agents.createAgent(db, {
+  return Agents.createAgent(db, SPACE, {
     name,
     instructions: entryFile(name),
     adapter_id: adapterId,
@@ -39,8 +41,8 @@ test("two-agent flow chains output into next input", async () => {
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "a1", m.id);
   const a2 = agent(db, "a2", m.id);
-  const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
-  const t = Tasks.createTask(db, {
+  const f = Flows.createFlow(db, SPACE, { name: "pipe", agent_ids: [a1.id, a2.id] });
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "seed",
     target_type: "flow",
@@ -62,7 +64,7 @@ test("single-agent task runs one step", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -78,7 +80,7 @@ test("running a task pings the tasks topic on start and settle", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -101,7 +103,7 @@ test("captures session id and replies resume the run with a new step", async () 
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "sess", command: SESSION });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -163,7 +165,7 @@ test("resuming a stopped step keeps it and appends a --resume continuation", asy
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "res", command: RESUME });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -199,7 +201,7 @@ test("resuming a stopped step with no session falls back to a fresh continuation
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "res", command: RESUME });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -223,8 +225,8 @@ test("resuming a flow stopped between steps continues the remaining agents", asy
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "a1", m.id);
   const a2 = agent(db, "a2", m.id);
-  const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
-  const t = Tasks.createTask(db, {
+  const f = Flows.createFlow(db, SPACE, { name: "pipe", agent_ids: [a1.id, a2.id] });
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "seed",
     target_type: "flow",
@@ -267,7 +269,7 @@ test("replying to a run without a session id throws", async () => {
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -282,7 +284,7 @@ test("failing step retries then fails, stopping the flow", async () => {
   const db = openDb(":memory:");
   const counter = join(tmpdir(), `ork-retry-${process.pid}-${Date.now()}`);
   if (existsSync(counter)) rmSync(counter);
-  Settings.updateSettings(db, { retries: 1, step_timeout_seconds: 5 });
+  Settings.updateSettings(db, SPACE, { retries: 1, step_timeout_seconds: 5 });
 
   const failing = Adapters.createAdapter(db, {
     name: "fail",
@@ -291,8 +293,8 @@ test("failing step retries then fails, stopping the flow", async () => {
   const okModel = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "boom", failing.id);
   const a2 = agent(db, "never", okModel.id);
-  const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
-  const t = Tasks.createTask(db, {
+  const f = Flows.createFlow(db, SPACE, { name: "pipe", agent_ids: [a1.id, a2.id] });
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "x",
     target_type: "flow",
@@ -308,5 +310,47 @@ test("failing step retries then fails, stopping the flow", async () => {
   expect(attempts).toBe(2);
   // second agent never ran
   expect(Runs.getRunWithSteps(db, run.id).steps.length).toBe(1);
+  rmSync(counter);
+});
+
+test("a run uses its own Space's settings, not another Space's", async () => {
+  const Spaces = await import("../../lib/repos/spaces");
+  const db = openDb(":memory:");
+  const counter = join(tmpdir(), `ork-space-retry-${process.pid}-${Date.now()}`);
+  if (existsSync(counter)) rmSync(counter);
+
+  // Seed Space keeps retries = 1; a second Space is set to retries = 0.
+  const work = Spaces.createSpace(db, { name: "Work" });
+  Settings.updateSettings(db, SPACE, { retries: 1, step_timeout_seconds: 5 });
+  Settings.updateSettings(db, work.id, { retries: 0, step_timeout_seconds: 5 });
+
+  const failing = Adapters.createAdapter(db, {
+    name: "fail",
+    command: `bash -c 'echo x >> ${counter}; exit 1'`,
+  });
+  // Agent + task live in the Work Space; the runner must resolve retries from it.
+  const a = Agents.createAgent(db, work.id, {
+    name: "boom",
+    instructions: [{ name: "AGENTS.md", body: "boom", is_entry: true }],
+    adapter_id: failing.id,
+    model: "opus",
+    effort: "off",
+    skill_ids: [],
+    project_ids: [],
+  });
+  const t = Tasks.createTask(db, work.id, {
+    title: "T",
+    body: "x",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const run = await runTask(db, t.id);
+
+  expect(run.status).toBe("failed");
+  // retries = 0 → a single attempt, no retry (proving Work's settings won, not
+  // the seed Space's retries = 1).
+  const attempts = readFileSync(counter, "utf8").trim().split("\n").length;
+  expect(attempts).toBe(1);
   rmSync(counter);
 });

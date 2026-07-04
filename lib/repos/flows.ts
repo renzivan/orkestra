@@ -14,15 +14,19 @@ interface FlowRow {
   updated_at: string;
 }
 
-export function createFlow(db: Database, input: FlowInput): Flow {
+export function createFlow(
+  db: Database,
+  spaceId: number,
+  input: FlowInput,
+): Flow {
   const now = new Date().toISOString();
   const tx = db.transaction((i: FlowInput) => {
     const row = db
       .query(
-        `INSERT INTO flows (name, created_at, updated_at)
-         VALUES ($name, $now, $now) RETURNING id`,
+        `INSERT INTO flows (name, space_id, created_at, updated_at)
+         VALUES ($name, $space, $now, $now) RETURNING id`,
       )
-      .get({ $name: i.name, $now: now }) as { id: number };
+      .get({ $name: i.name, $space: spaceId, $now: now }) as { id: number };
     writeSteps(db, row.id, i.agent_ids);
     return row.id;
   });
@@ -53,10 +57,10 @@ function writeSteps(db: Database, flowId: number, agentIds: number[]): void {
   });
 }
 
-export function listFlows(db: Database): Flow[] {
+export function listFlows(db: Database, spaceId: number): Flow[] {
   const rows = db
-    .query("SELECT id FROM flows ORDER BY name COLLATE NOCASE")
-    .all() as { id: number }[];
+    .query("SELECT id FROM flows WHERE space_id = ? ORDER BY name COLLATE NOCASE")
+    .all(spaceId) as { id: number }[];
   return rows.map((r) => getFlow(db, r.id)!);
 }
 

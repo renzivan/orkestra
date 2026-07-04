@@ -4,6 +4,8 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const DB_FILE = join(tmpdir(), `ork-actions-${process.pid}.db`);
 
 beforeEach(async () => {
@@ -106,7 +108,7 @@ test("deleting a target agent reassigns its task to the Default agent", async ()
   Agents.deleteAgent(db(), agent.id);
 
   // The task now points at the Default agent instead of a deleted one.
-  const def = Agents.getDefaultAgent(db());
+  const def = Agents.getDefaultAgent(db(), SPACE);
   const got = Tasks.getTask(db(), task.id)!;
   expect(got.target_id).toBe(def.id);
 

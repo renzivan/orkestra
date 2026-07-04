@@ -13,10 +13,12 @@ import * as Settings from "../../lib/repos/settings";
 import { runTask, resumeRun } from "../../lib/engine/runner";
 import { stop, pause } from "../../lib/engine/registry";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const ECHO = "bash test/fixtures/echo-model.sh";
 
 function agent(db: any, name: string, adapterId: number) {
-  return Agents.createAgent(db, {
+  return Agents.createAgent(db, SPACE, {
     name,
     instructions: entryFile(name),
     adapter_id: adapterId,
@@ -40,14 +42,14 @@ test("stopping a running task marks it stopped and does not retry", async () => 
   const db = openDb(":memory:");
   const counter = join(tmpdir(), `ork-stop-${process.pid}-${Date.now()}`);
   if (existsSync(counter)) rmSync(counter);
-  Settings.updateSettings(db, { retries: 2, step_timeout_seconds: 60 });
+  Settings.updateSettings(db, SPACE, { retries: 2, step_timeout_seconds: 60 });
 
   const sleepy = Adapters.createAdapter(db, {
     name: "sleep",
     command: `bash test/fixtures/sleep-model.sh ${counter}`,
   });
   const a = agent(db, "blocker", sleepy.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -84,7 +86,7 @@ test("pausing a running task winds the run down to 'paused'", async () => {
     command: `bash test/fixtures/sleep-model.sh ${counter}`,
   });
   const a = agent(db, "blocker", sleepy.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -115,7 +117,7 @@ test("stopping a running task winds the run down to 'stopped'", async () => {
     command: `bash test/fixtures/sleep-model.sh ${counter}`,
   });
   const a = agent(db, "blocker", sleepy.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -140,8 +142,8 @@ test("resume keeps the interrupted step and appends its continuation", async () 
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a1 = agent(db, "a1", m.id);
   const a2 = agent(db, "a2", m.id);
-  const f = Flows.createFlow(db, { name: "pipe", agent_ids: [a1.id, a2.id] });
-  const t = Tasks.createTask(db, {
+  const f = Flows.createFlow(db, SPACE, { name: "pipe", agent_ids: [a1.id, a2.id] });
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "seed",
     target_type: "flow",
@@ -183,7 +185,7 @@ test("resume of a single-agent task keeps step 0 and continues from the task bod
   const db = openDb(":memory:");
   const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
   const a = agent(db, "solo", m.id);
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hello",
     target_type: "agent",

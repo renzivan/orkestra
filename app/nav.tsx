@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { setActiveSpaceAction, createSpaceAction } from "./actions";
 
 interface NavItem {
   id: number;
@@ -17,10 +19,14 @@ export interface NavGroup {
 export function Nav({
   groups,
   unreadTasks,
+  spaces,
+  activeSpaceId,
 }: {
   groups: NavGroup[];
   /** Tasks needing attention (settled + unseen); shown as a badge on Tasks. */
   unreadTasks: number;
+  spaces: NavItem[];
+  activeSpaceId: number;
 }) {
   const path = usePathname();
   const isActive = (href: string) =>
@@ -28,6 +34,8 @@ export function Nav({
 
   return (
     <nav className="nav">
+      <SpaceSwitcher spaces={spaces} activeSpaceId={activeSpaceId} />
+
       <div className="nav-group">
         <div className="nav-group-head">
           <span className="nav-group-label">Work</span>
@@ -73,6 +81,186 @@ export function Nav({
         Settings
       </Link>
     </nav>
+  );
+}
+
+/** Top-of-sidebar Space switcher: shows the active Space and, on click, a menu
+ *  to switch between Spaces or create a new one. Switching is a pure view change
+ *  (running work keeps going); rename/delete live on the Settings page. */
+function SpaceSwitcher({
+  spaces,
+  activeSpaceId,
+}: {
+  spaces: NavItem[];
+  activeSpaceId: number;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const active = spaces.find((s) => s.id === activeSpaceId);
+
+  // Close on click/tap outside the switcher, and on Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  async function switchTo(id: number) {
+    if (id === activeSpaceId) return setOpen(false);
+    setBusy(true);
+    await setActiveSpaceAction(id);
+    setOpen(false);
+    setBusy(false);
+    router.refresh();
+  }
+
+  function openCreate() {
+    setName("");
+    setError("");
+    setOpen(false);
+    setCreating(true);
+  }
+
+  function closeCreate() {
+    if (busy) return;
+    setCreating(false);
+    setName("");
+    setError("");
+  }
+
+  async function create() {
+    const n = name.trim();
+    if (!n) return setError("Name required.");
+    setBusy(true);
+    setError("");
+    try {
+      // createSpaceAction switches the active Space to the new one, so a refresh
+      // lands us inside it.
+      await createSpaceAction(n);
+      setName("");
+      setCreating(false);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-switcher" ref={rootRef}>
+      <button
+        type="button"
+        className="space-current"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="space-name">{active?.name ?? "Space"}</span>
+        <span className={`nav-caret ${open ? "open" : ""}`} aria-hidden>
+          ›
+        </span>
+      </button>
+
+      {open && (
+        <div className="space-menu">
+          <div className="space-menu-label">Switch spaces</div>
+          {spaces.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`space-menu-item${s.id === activeSpaceId ? " active" : ""}`}
+              disabled={busy}
+              onClick={() => switchTo(s.id)}
+            >
+              {s.name}
+              {s.id === activeSpaceId && (
+                <span className="space-check" aria-hidden>
+                  ✓
+                </span>
+              )}
+            </button>
+          ))}
+
+          <div className="space-menu-sep" />
+
+          <button
+            type="button"
+            className="space-menu-item space-menu-new"
+            onClick={openCreate}
+          >
+            + New space
+          </button>
+        </div>
+      )}
+
+      {creating &&
+        createPortal(
+        <div
+          className="overlay"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeCreate();
+          }}
+        >
+          <div
+            className="dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="New space"
+          >
+            <h3 style={{ margin: 0 }}>New space</h3>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              placeholder="Space name"
+              disabled={busy}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") create();
+                if (e.key === "Escape") closeCreate();
+              }}
+            />
+            {error && <div className="error">{error}</div>}
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={closeCreate}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy}
+                onClick={create}
+              >
+                {busy ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>,
+          document.body,
+        )}
+    </div>
   );
 }
 

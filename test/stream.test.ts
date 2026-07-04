@@ -4,6 +4,8 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const DB_FILE = join(tmpdir(), `ork-stream-${process.pid}.db`);
 
 beforeEach(async () => {
@@ -48,7 +50,7 @@ test("stream replays a finished run and emits a done event", async () => {
     name: "echo",
     command: "bash test/fixtures/echo-model.sh",
   });
-  const a = Agents.createAgent(db(), {
+  const a = Agents.createAgent(db(), SPACE, {
     name: "solo",
     instructions: entryFile("b"),
     adapter_id: ad.id,
@@ -57,7 +59,7 @@ test("stream replays a finished run and emits a done event", async () => {
     skill_ids: [],
     project_ids: [],
   });
-  const t = Tasks.createTask(db(), {
+  const t = Tasks.createTask(db(), SPACE, {
     title: "T",
     body: "hey",
     target_type: "agent",

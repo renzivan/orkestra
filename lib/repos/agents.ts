@@ -31,6 +31,7 @@ interface AgentRow {
   effort: string;
   skip_permissions: number; // SQLite 0/1
   is_default: number; // SQLite 0/1
+  space_id: number;
   created_at: string;
   updated_at: string;
 }
@@ -59,14 +60,18 @@ function validateInstructions(instructions: InstructionInput[]): void {
   }
 }
 
-export function createAgent(db: Database, input: AgentInput): Agent {
+export function createAgent(
+  db: Database,
+  spaceId: number,
+  input: AgentInput,
+): Agent {
   validateInstructions(input.instructions);
   const now = new Date().toISOString();
   const insert = db.transaction((i: AgentInput) => {
     const row = db
       .query(
-        `INSERT INTO agents (name, adapter_id, model, effort, skip_permissions, is_default, created_at, updated_at)
-         VALUES ($name, $adapter, $model, $effort, $skip, 0, $now, $now) RETURNING id`,
+        `INSERT INTO agents (name, adapter_id, model, effort, skip_permissions, is_default, space_id, created_at, updated_at)
+         VALUES ($name, $adapter, $model, $effort, $skip, 0, $space, $now, $now) RETURNING id`,
       )
       .get({
         $name: i.name,
@@ -74,6 +79,7 @@ export function createAgent(db: Database, input: AgentInput): Agent {
         $model: i.model,
         $effort: i.effort,
         $skip: (i.skip_permissions ?? true) ? 1 : 0,
+        $space: spaceId,
         $now: now,
       }) as { id: number };
     writeRelations(db, row.id, i);
@@ -149,10 +155,12 @@ function writeRelations(db: Database, agentId: number, input: AgentInput): void 
   }
 }
 
-export function listAgents(db: Database): Agent[] {
+export function listAgents(db: Database, spaceId: number): Agent[] {
   const rows = db
-    .query("SELECT id FROM agents ORDER BY name COLLATE NOCASE")
-    .all() as { id: number }[];
+    .query(
+      "SELECT id FROM agents WHERE space_id = ? ORDER BY name COLLATE NOCASE",
+    )
+    .all(spaceId) as { id: number }[];
   return rows.map((r) => getAgent(db, r.id)!);
 }
 
@@ -180,14 +188,18 @@ export function getAgent(db: Database, id: number): Agent | null {
     )
     .all(id) as Skill[];
 
-  // The Default agent is scoped to every project, resolved live so projects
-  // added after it was seeded are included automatically (its agent_projects
-  // rows are never written). Others use their explicit project list.
+  // The Default agent is scoped to every project in its own Space, resolved live
+  // so projects added after it was seeded are included automatically (its
+  // agent_projects rows are never written). Others use their explicit project
+  // list. Scoping by row.space_id keeps a Space's Default agent blind to other
+  // Spaces' projects.
   const projects =
     row.is_default === 1
       ? (db
-          .query("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
-          .all() as Project[])
+          .query(
+            "SELECT * FROM projects WHERE space_id = ? ORDER BY name COLLATE NOCASE",
+          )
+          .all(row.space_id) as Project[])
       : (db
           .query(
             `SELECT p.* FROM projects p
@@ -206,12 +218,13 @@ export function getAgent(db: Database, id: number): Agent | null {
   };
 }
 
-/** The built-in Default agent (always present — seeded by migration v9). */
-export function getDefaultAgent(db: Database): Agent {
+/** A Space's built-in Default agent (always present — seeded by migration v11
+ *  for the initial Space and by createSpace for every Space after). */
+export function getDefaultAgent(db: Database, spaceId: number): Agent {
   const row = db
-    .query("SELECT id FROM agents WHERE is_default = 1")
-    .get() as { id: number } | null;
-  if (!row) throw new Error("default agent missing");
+    .query("SELECT id FROM agents WHERE is_default = 1 AND space_id = ?")
+    .get(spaceId) as { id: number } | null;
+  if (!row) throw new Error(`default agent missing for space ${spaceId}`);
   return getAgent(db, row.id)!;
 }
 
@@ -231,7 +244,13 @@ export function deleteAgent(db: Database, id: number): void {
     throw new Error("The default agent can't be deleted.");
   }
   const now = new Date().toISOString();
-  const defaultId = getDefaultAgent(db).id;
+  // Reassign to the Default agent of *this agent's own Space*, so an orphaned
+  // task never jumps Spaces.
+  const space = db
+    .query("SELECT space_id FROM agents WHERE id = ?")
+    .get(id) as { space_id: number } | null;
+  if (!space) return; // already gone — nothing to reassign or delete
+  const defaultId = getDefaultAgent(db, space.space_id).id;
   const tx = db.transaction(() => {
     db.query(
       `UPDATE tasks SET target_id = $default, updated_at = $now

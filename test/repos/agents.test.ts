@@ -6,11 +6,13 @@ import * as Projects from "../../lib/repos/projects";
 import * as Adapters from "../../lib/repos/adapters";
 import * as R from "../../lib/repos/agents";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 function fixtures(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "claude {input}" });
-  const s1 = Skills.createSkill(db, { name: "plan", body: "Plan first." });
-  const s2 = Skills.createSkill(db, { name: "tdd", body: "Test first." });
-  const p = Projects.createProject(db, { name: "app", path: "/app" });
+  const s1 = Skills.createSkill(db, SPACE, { name: "plan", body: "Plan first." });
+  const s2 = Skills.createSkill(db, SPACE, { name: "tdd", body: "Test first." });
+  const p = Projects.createProject(db, SPACE, { name: "app", path: "/app" });
   return { ad, s1, s2, p };
 }
 
@@ -18,7 +20,7 @@ test("agent keeps skill order, nests projects, and stores model + effort", () =>
   const db = openDb(":memory:");
   const { ad, s1, s2, p } = fixtures(db);
 
-  const a = R.createAgent(db, {
+  const a = R.createAgent(db, SPACE, {
     name: "planner",
     instructions: entryFile("You plan."),
     adapter_id: ad.id,
@@ -40,7 +42,7 @@ test("agent with zero skills and zero projects is valid", () => {
   const db = openDb(":memory:");
   const { ad } = fixtures(db);
 
-  const b = R.createAgent(db, {
+  const b = R.createAgent(db, SPACE, {
     name: "bare",
     instructions: entryFile("hi"),
     adapter_id: ad.id,
@@ -56,7 +58,7 @@ test("agent with zero skills and zero projects is valid", () => {
 test("updateAgent replaces skills, model, and effort", () => {
   const db = openDb(":memory:");
   const { ad, s1, s2, p } = fixtures(db);
-  const a = R.createAgent(db, {
+  const a = R.createAgent(db, SPACE, {
     name: "planner",
     instructions: entryFile("You plan."),
     adapter_id: ad.id,
@@ -87,7 +89,7 @@ test("updateAgent replaces skills, model, and effort", () => {
 test("multiple instruction files keep order, entry flag, and position", () => {
   const db = openDb(":memory:");
   const { ad } = fixtures(db);
-  const a = R.createAgent(db, {
+  const a = R.createAgent(db, SPACE, {
     name: "ceo",
     instructions: [
       { name: "AGENTS.md", body: "identity", is_entry: true },
@@ -115,7 +117,7 @@ test("multiple instruction files keep order, entry flag, and position", () => {
 test("instruction files cascade-delete with their agent", () => {
   const db = openDb(":memory:");
   const { ad } = fixtures(db);
-  const a = R.createAgent(db, {
+  const a = R.createAgent(db, SPACE, {
     name: "temp",
     instructions: entryFile("bye"),
     adapter_id: ad.id,
@@ -145,19 +147,19 @@ test("invalid instruction sets are rejected", () => {
     project_ids: [],
   };
   // zero files
-  expect(() => R.createAgent(db, { ...base, instructions: [] })).toThrow(
+  expect(() => R.createAgent(db, SPACE, { ...base, instructions: [] })).toThrow(
     /at least one instruction file/i,
   );
   // zero entries
   expect(() =>
-    R.createAgent(db, {
+    R.createAgent(db, SPACE, {
       ...base,
       instructions: [{ name: "AGENTS.md", body: "a", is_entry: false }],
     }),
   ).toThrow(/exactly one/i);
   // two entries
   expect(() =>
-    R.createAgent(db, {
+    R.createAgent(db, SPACE, {
       ...base,
       instructions: [
         { name: "AGENTS.md", body: "a", is_entry: true },
@@ -167,7 +169,7 @@ test("invalid instruction sets are rejected", () => {
   ).toThrow(/exactly one/i);
   // duplicate names
   expect(() =>
-    R.createAgent(db, {
+    R.createAgent(db, SPACE, {
       ...base,
       instructions: [
         { name: "AGENTS.md", body: "a", is_entry: true },
@@ -177,7 +179,7 @@ test("invalid instruction sets are rejected", () => {
   ).toThrow(/duplicate/i);
   // empty name
   expect(() =>
-    R.createAgent(db, {
+    R.createAgent(db, SPACE, {
       ...base,
       instructions: [{ name: "  ", body: "a", is_entry: true }],
     }),

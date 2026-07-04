@@ -3,10 +3,12 @@ import { openDb } from "../../lib/db";
 import * as Tasks from "../../lib/repos/tasks";
 import { startRun } from "../../lib/repos/runs";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 test("deleteTask removes the task and cascades its runs", () => {
   const db = openDb(":memory:");
 
-  const task = Tasks.createTask(db, {
+  const task = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "b",
     target_type: "agent",
@@ -28,7 +30,7 @@ test("deleteTask removes the task and cascades its runs", () => {
 });
 
 function makeTask(db: ReturnType<typeof openDb>) {
-  return Tasks.createTask(db, {
+  return Tasks.createTask(db, SPACE, {
     title: "T",
     body: "b",
     target_type: "agent",
@@ -83,11 +85,11 @@ test("countUnreadTasks counts settled-and-unseen succeeded/failed only", () => {
   Tasks.setTaskStatus(db, makeTask(db).id, "running");
   makeTask(db); // pending
 
-  expect(Tasks.countUnreadTasks(db)).toBe(2);
+  expect(Tasks.countUnreadTasks(db, SPACE)).toBe(2);
 
   // Opening one clears it.
   Tasks.markTaskSeen(db, succeeded.id);
-  expect(Tasks.countUnreadTasks(db)).toBe(1);
+  expect(Tasks.countUnreadTasks(db, SPACE)).toBe(1);
 });
 
 test("isTaskUnread flags settled-and-unseen succeeded/failed only", () => {
@@ -115,18 +117,18 @@ test("countUnreadTasks re-arms after a fresh settle following a prior seen", asy
   const task = makeTask(db);
   Tasks.setTaskStatus(db, task.id, "succeeded");
   Tasks.markTaskSeen(db, task.id);
-  expect(Tasks.countUnreadTasks(db)).toBe(0);
+  expect(Tasks.countUnreadTasks(db, SPACE)).toBe(0);
 
   // A re-run settles again after the prior seen; back to unread.
   await Bun.sleep(2); // ISO ms timestamps must strictly advance
   Tasks.setTaskStatus(db, task.id, "running");
   Tasks.setTaskStatus(db, task.id, "succeeded");
-  expect(Tasks.countUnreadTasks(db)).toBe(1);
+  expect(Tasks.countUnreadTasks(db, SPACE)).toBe(1);
 });
 
 test("pausing a task does not stamp settled_at or count as unread", () => {
   const db = openDb(":memory:");
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "hi",
     target_type: "agent",
@@ -137,5 +139,5 @@ test("pausing a task does not stamp settled_at or count as unread", () => {
   expect(paused.status).toBe("paused");
   expect(paused.settled_at).toBeNull(); // silent: no settle stamp
   expect(Tasks.isTaskUnread(paused)).toBe(false);
-  expect(Tasks.countUnreadTasks(db)).toBe(0);
+  expect(Tasks.countUnreadTasks(db, SPACE)).toBe(0);
 });

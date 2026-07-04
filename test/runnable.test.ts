@@ -7,9 +7,11 @@ import * as Flows from "../lib/repos/flows";
 import * as Tasks from "../lib/repos/tasks";
 import { taskRunnable } from "../lib/runnable";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 function setup(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
-  const a = Agents.createAgent(db, {
+  const a = Agents.createAgent(db, SPACE, {
     name: "agent",
     instructions: entryFile("b"),
     adapter_id: ad.id,
@@ -18,15 +20,15 @@ function setup(db: ReturnType<typeof openDb>) {
     skill_ids: [],
     project_ids: [],
   });
-  const f = Flows.createFlow(db, { name: "flow", agent_ids: [a.id] });
+  const f = Flows.createFlow(db, SPACE, { name: "flow", agent_ids: [a.id] });
   return { ad, a, f };
 }
 
 function agentTask(db: ReturnType<typeof openDb>, id: number) {
-  return Tasks.createTask(db, { title: "t", body: "", target_type: "agent", target_id: id });
+  return Tasks.createTask(db, SPACE, { title: "t", body: "", target_type: "agent", target_id: id });
 }
 function flowTask(db: ReturnType<typeof openDb>, id: number) {
-  return Tasks.createTask(db, { title: "t", body: "", target_type: "flow", target_id: id });
+  return Tasks.createTask(db, SPACE, { title: "t", body: "", target_type: "flow", target_id: id });
 }
 
 test("a well-formed agent task and flow task are runnable", () => {

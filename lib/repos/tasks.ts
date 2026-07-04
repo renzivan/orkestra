@@ -22,18 +22,23 @@ export function taskDeleteMessage(label: string, running: boolean): string {
     : `Delete "${label}"? This can't be undone.`;
 }
 
-export function createTask(db: Database, input: TaskInput): Task {
+export function createTask(
+  db: Database,
+  spaceId: number,
+  input: TaskInput,
+): Task {
   const now = new Date().toISOString();
   return db
     .query(
-      `INSERT INTO tasks (title, body, target_type, target_id, status, created_at, updated_at)
-       VALUES ($title, $body, $tt, $tid, 'pending', $now, $now) RETURNING *`,
+      `INSERT INTO tasks (title, body, target_type, target_id, status, space_id, created_at, updated_at)
+       VALUES ($title, $body, $tt, $tid, 'pending', $space, $now, $now) RETURNING *`,
     )
     .get({
       $title: input.title,
       $body: input.body,
       $tt: input.target_type,
       $tid: input.target_id,
+      $space: spaceId,
       $now: now,
     }) as Task;
 }
@@ -76,24 +81,28 @@ export function isTaskUnread(t: Task): boolean {
   return t.seen_at === null || t.seen_at < t.settled_at;
 }
 
-/** Count tasks needing the user's attention: settled into succeeded/failed and
- *  not opened since (seen_at null or older than settled_at). Powers the sidebar
- *  Tasks badge. */
-export function countUnreadTasks(db: Database): number {
+/** Count tasks needing the user's attention in a Space: settled into
+ *  succeeded/failed and not opened since (seen_at null or older than
+ *  settled_at). Powers the sidebar Tasks badge, which is scoped to the active
+ *  Space. */
+export function countUnreadTasks(db: Database, spaceId: number): number {
   return (
     db
       .query(
         `SELECT COUNT(*) AS n FROM tasks
-          WHERE status IN ('succeeded','failed')
+          WHERE space_id = $space
+            AND status IN ('succeeded','failed')
             AND settled_at IS NOT NULL
             AND (seen_at IS NULL OR seen_at < settled_at)`,
       )
-      .get() as { n: number }
+      .get({ $space: spaceId }) as { n: number }
   ).n;
 }
 
-export function listTasks(db: Database): Task[] {
-  return db.query("SELECT * FROM tasks ORDER BY created_at DESC").all() as Task[];
+export function listTasks(db: Database, spaceId: number): Task[] {
+  return db
+    .query("SELECT * FROM tasks WHERE space_id = ? ORDER BY created_at DESC")
+    .all(spaceId) as Task[];
 }
 
 export function getTask(db: Database, id: number): Task | null {

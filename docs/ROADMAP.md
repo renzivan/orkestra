@@ -6,12 +6,18 @@ Domain language follows `CONTEXT.md`; new terms proposed here should be added th
 
 ---
 
-## 1. Workspaces (top-level isolation)
+## 1. Workspaces (top-level isolation) — ✅ DONE (shipped as "Spaces")
 
-Create a Workspace and get a fresh, blank Orkestra: its own Projects, Tasks, Flows, Agents, Skills, and Settings, fully isolated from every other Workspace.
-Goal: one Workspace for personal, one for work, with no bleed between them.
+Create a Space and get a fresh, blank Orkestra: its own Projects, Tasks, Flows, Agents, Skills, and Settings, fully isolated from every other Space.
+Goal: one Space for personal, one for work, with no bleed between them.
 
-### Naming conflict — resolve before building
+**Status:** shipped.
+Design and decisions live in `docs/superpowers/specs/2026-07-04-spaces-design.md`.
+Name resolved to **Space** (see below).
+Isolation is by a `space_id` scope on every table (single SQLite file), not the file-per-Space approach the design notes below floated — simpler, and a Space switch is a cookie change, not a DB re-open.
+Includes a sidebar Space switcher (switch / create-via-modal), per-Space Settings, and rename / delete on the Settings page.
+
+### Naming conflict — resolved: **Space**
 
 `CONTEXT.md` already lists **Workspace** as a word to _avoid_ (it is a banned synonym for **Project**).
 The feature described here is not a Project — it is the isolation container that _holds_ Projects.

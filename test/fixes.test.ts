@@ -3,6 +3,8 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { rmSync, existsSync } from "fs";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const DB_FILE = join(tmpdir(), `ork-fixes-${process.pid}.db`);
 
 beforeEach(async () => {
@@ -20,7 +22,7 @@ test("reopening the DB marks stale 'running' runs/steps/tasks as failed", async 
   const Tasks = await import("../lib/repos/tasks");
   const Runs = await import("../lib/repos/runs");
 
-  const t = Tasks.createTask(db(), {
+  const t = Tasks.createTask(db(), SPACE, {
     title: "T",
     body: "x",
     target_type: "agent",
@@ -59,7 +61,7 @@ test("SSE subscribes before replay so live events aren't lost", async () => {
   const { publish } = await import("../lib/engine/bus");
   const { GET } = await import("../app/api/runs/[id]/stream/route");
 
-  const t = Tasks.createTask(db(), {
+  const t = Tasks.createTask(db(), SPACE, {
     title: "T",
     body: "x",
     target_type: "agent",

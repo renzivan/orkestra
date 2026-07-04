@@ -15,7 +15,7 @@ export default async function AgentPage({
   const agent = getAgent(db(), Number(id));
   if (!agent) notFound();
 
-  const { adapters, skills, projects } = loadAgentChoices();
+  const { adapters, skills, projects } = await loadAgentChoices();
   return (
     <AgentForm
       agent={agent}

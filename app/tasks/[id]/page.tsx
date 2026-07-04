@@ -22,7 +22,9 @@ export default async function TaskDetailPage({
 
   const latest = latestRunForTask(database, task.id);
   const run = latest ? getRunWithSteps(database, latest.id) : null;
-  const prefix = getSettings(database).task_prefix;
+  // Prefix comes from the task's own Space, not the active one — a task detail
+  // page can be opened while a different Space is active.
+  const prefix = getSettings(database, task.space_id).task_prefix;
   const runnable = taskRunnable(database, task);
 
   return (

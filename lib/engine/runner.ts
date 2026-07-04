@@ -45,7 +45,7 @@ export async function runTask(
   if (!task) throw new Error(`task ${taskId} not found`);
 
   const agents = resolveAgents(db, task);
-  const settings = getSettings(db);
+  const settings = getSettings(db, task.space_id);
   const run = Runs.startRun(db, taskId);
   setTaskStatus(db, taskId, "running");
 
@@ -74,7 +74,7 @@ export async function resumeRun(
   const task = getTask(db, run.task_id);
   if (!task) throw new Error(`task ${run.task_id} not found`);
   const agents = resolveAgents(db, task);
-  const settings = getSettings(db);
+  const settings = getSettings(db, task.space_id);
 
   const stoppedAt = run.steps.findIndex((s) => s.status !== "succeeded");
 
@@ -188,7 +188,9 @@ export async function replyToRun(
   const adapter =
     agent.adapter_id == null ? null : getAdapter(db, agent.adapter_id);
   if (!adapter) throw new Error(`agent "${agent.name}" has no adapter`);
-  const settings = getSettings(db);
+  const task = getTask(db, run.task_id);
+  if (!task) throw new Error(`task ${run.task_id} not found`);
+  const settings = getSettings(db, task.space_id);
 
   Runs.reopenRun(db, runId);
   setTaskStatus(db, run.task_id, "running");

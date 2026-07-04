@@ -6,8 +6,8 @@ test("v11 lets tasks, runs and run_steps hold a 'paused' status", () => {
   // The CHECK constraints must accept 'paused' on all three tables.
   const now = new Date().toISOString();
   db.query(
-    `INSERT INTO tasks (title, body, target_type, target_id, status, created_at, updated_at)
-     VALUES ('T', '', 'agent', 1, 'paused', $n, $n)`,
+    `INSERT INTO tasks (title, body, target_type, target_id, status, space_id, created_at, updated_at)
+     VALUES ('T', '', 'agent', 1, 'paused', 1, $n, $n)`,
   ).run({ $n: now });
   const task = db.query("SELECT id FROM tasks WHERE status='paused'").get() as {
     id: number;

@@ -7,12 +7,14 @@ import * as Projects from "@/lib/repos/projects";
 import * as Agents from "@/lib/repos/agents";
 import * as Flows from "@/lib/repos/flows";
 import * as Tasks from "@/lib/repos/tasks";
+import * as Spaces from "@/lib/repos/spaces";
 import { latestRunForTask } from "@/lib/repos/runs";
 import * as Settings from "@/lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
 import { stop, pause } from "@/lib/engine/registry";
 import { referencesTo, type RefKind } from "@/lib/refs";
 import { taskRunnable } from "@/lib/runnable";
+import { getActiveSpaceId, setActiveSpaceCookie } from "./active-space";
 import type { Ref, Settings as SettingsT, TargetType } from "@/lib/types";
 
 export type DeleteResult = { ok: true } | { ok: false; error: string };
@@ -59,10 +61,11 @@ function withFriendly<T>(kind: string, fn: () => T): T {
 
 // ---- Skills ----
 export async function saveSkill(input: { id?: number; name: string; body: string }) {
+  const spaceId = await getActiveSpaceId(db());
   const row = withFriendly("skill", () =>
     input.id
       ? Skills.updateSkill(db(), input.id!, input)
-      : Skills.createSkill(db(), input),
+      : Skills.createSkill(db(), spaceId, input),
   );
   revalidate("/skills");
   return row;
@@ -73,10 +76,11 @@ export async function deleteSkillAction(id: number): Promise<DeleteResult> {
 
 // ---- Projects ----
 export async function saveProject(input: { id?: number; name: string; path: string }) {
+  const spaceId = await getActiveSpaceId(db());
   const row = withFriendly("project", () =>
     input.id
       ? Projects.updateProject(db(), input.id!, input)
-      : Projects.createProject(db(), input),
+      : Projects.createProject(db(), spaceId, input),
   );
   revalidate("/projects");
   return row;
@@ -130,10 +134,11 @@ export async function saveAgent(input: {
   skill_ids: number[];
   project_ids: number[];
 }) {
+  const spaceId = await getActiveSpaceId(db());
   const row = withFriendly("agent", () =>
     input.id
       ? Agents.updateAgent(db(), input.id!, input)
-      : Agents.createAgent(db(), input),
+      : Agents.createAgent(db(), spaceId, input),
   );
   revalidate("/agents");
   return row;
@@ -148,10 +153,11 @@ export async function saveFlow(input: {
   name: string;
   agent_ids: number[];
 }) {
+  const spaceId = await getActiveSpaceId(db());
   const row = withFriendly("flow", () =>
     input.id
       ? Flows.updateFlow(db(), input.id!, input)
-      : Flows.createFlow(db(), input),
+      : Flows.createFlow(db(), spaceId, input),
   );
   revalidate("/flows");
   return row;
@@ -162,9 +168,47 @@ export async function deleteFlowAction(id: number): Promise<DeleteResult> {
 
 // ---- Settings ----
 export async function saveSettings(input: SettingsT) {
-  const row = Settings.updateSettings(db(), input);
+  const spaceId = await getActiveSpaceId(db());
+  const row = Settings.updateSettings(db(), spaceId, input);
   revalidate("/settings");
   return row;
+}
+
+// ---- Spaces ----
+/** Switch the active Space (a view scope). Revalidates the whole tree so every
+ *  scoped list re-reads against the new Space; running work is untouched. */
+export async function setActiveSpaceAction(id: number): Promise<{ ok: true }> {
+  await setActiveSpaceCookie(id);
+  revalidate("/");
+  return { ok: true };
+}
+
+export async function createSpaceAction(name: string) {
+  const space = withFriendly("space", () =>
+    Spaces.createSpace(db(), { name: name.trim() }),
+  );
+  // A new Space is empty; switch to it so the user lands inside what they made.
+  await setActiveSpaceCookie(space.id);
+  revalidate("/");
+  return space;
+}
+
+export async function renameSpaceAction(id: number, name: string) {
+  const space = withFriendly("space", () =>
+    Spaces.renameSpace(db(), id, name.trim()),
+  );
+  revalidate("/");
+  return space;
+}
+
+/** Delete a Space and all its data (cascade). Refused for the last Space. A
+ *  cookie still pointing at the deleted Space is harmless — getActiveSpaceId
+ *  falls back to the earliest Space when its id no longer resolves. */
+export async function deleteSpaceAction(id: number): Promise<DeleteResult> {
+  const res = Spaces.deleteSpace(db(), id);
+  if (!res.ok) return res;
+  revalidate("/");
+  return { ok: true };
 }
 
 // ---- Tasks ----
@@ -174,7 +218,8 @@ export async function createTaskAction(input: {
   target_type: TargetType;
   target_id: number;
 }) {
-  const task = Tasks.createTask(db(), input);
+  const spaceId = await getActiveSpaceId(db());
+  const task = Tasks.createTask(db(), spaceId, input);
   revalidate("/tasks");
   return task;
 }

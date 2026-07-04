@@ -7,6 +7,8 @@ import { listFlows } from "@/lib/repos/flows";
 import { listSkills } from "@/lib/repos/skills";
 import { listProjects } from "@/lib/repos/projects";
 import { countUnreadTasks } from "@/lib/repos/tasks";
+import { listSpaces } from "@/lib/repos/spaces";
+import { getActiveSpaceId } from "./active-space";
 import { Nav, type NavGroup } from "./nav";
 import { Toaster } from "./toast";
 
@@ -18,19 +20,21 @@ export const metadata: Metadata = {
 // The sidebar lists live records, so the layout reads them on each request.
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const database = db();
+  const spaceId = await getActiveSpaceId(database);
+  const spaces = listSpaces(database).map((s) => ({ id: s.id, name: s.name }));
   const named = <T extends { id: number; name: string }>(rows: T[]) =>
     rows.map((r) => ({ id: r.id, name: r.name }));
   const groups: NavGroup[] = [
-    { title: "Projects", base: "/projects", items: named(listProjects(database)) },
-    { title: "Flows", base: "/flows", items: named(listFlows(database)) },
-    { title: "Agents", base: "/agents", items: named(listAgents(database)) },
-    { title: "Skills", base: "/skills", items: named(listSkills(database)) },
+    { title: "Projects", base: "/projects", items: named(listProjects(database, spaceId)) },
+    { title: "Flows", base: "/flows", items: named(listFlows(database, spaceId)) },
+    { title: "Agents", base: "/agents", items: named(listAgents(database, spaceId)) },
+    { title: "Skills", base: "/skills", items: named(listSkills(database, spaceId)) },
   ];
-  const unreadTasks = countUnreadTasks(database);
+  const unreadTasks = countUnreadTasks(database, spaceId);
   return (
     <html lang="en">
       <body>
@@ -40,7 +44,12 @@ export default function RootLayout({
               <span className="dot" />
               Orkestra
             </Link>
-            <Nav groups={groups} unreadTasks={unreadTasks} />
+            <Nav
+              groups={groups}
+              unreadTasks={unreadTasks}
+              spaces={spaces}
+              activeSpaceId={spaceId}
+            />
           </aside>
           <main className="content">{children}</main>
         </div>

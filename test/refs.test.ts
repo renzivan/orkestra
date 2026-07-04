@@ -8,11 +8,13 @@ import * as Agents from "../lib/repos/agents";
 import * as Flows from "../lib/repos/flows";
 import { referencesTo } from "../lib/refs";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 function fixtures(db: ReturnType<typeof openDb>) {
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
-  const s = Skills.createSkill(db, { name: "plan", body: "plan" });
-  const p = Projects.createProject(db, { name: "app", path: "/app" });
-  const a = Agents.createAgent(db, {
+  const s = Skills.createSkill(db, SPACE, { name: "plan", body: "plan" });
+  const p = Projects.createProject(db, SPACE, { name: "app", path: "/app" });
+  const a = Agents.createAgent(db, SPACE, {
     name: "agent",
     instructions: entryFile("b"),
     adapter_id: ad.id,
@@ -21,7 +23,7 @@ function fixtures(db: ReturnType<typeof openDb>) {
     skill_ids: [s.id],
     project_ids: [p.id],
   });
-  const f = Flows.createFlow(db, { name: "flow", agent_ids: [a.id] });
+  const f = Flows.createFlow(db, SPACE, { name: "flow", agent_ids: [a.id] });
   return { ad, s, p, a, f };
 }
 
@@ -60,7 +62,7 @@ test("deleting an adapter nulls it out on agents (kept, non-runnable)", () => {
 test("deleting an agent drops its flow steps; the flow shrinks", () => {
   const db = openDb(":memory:");
   const { a, f } = fixtures(db);
-  const b = Agents.createAgent(db, {
+  const b = Agents.createAgent(db, SPACE, {
     name: "second",
     instructions: entryFile("b"),
     adapter_id: fixturesAdapterId(db),

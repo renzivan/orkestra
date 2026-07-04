@@ -4,17 +4,19 @@ import { listFlows } from "@/lib/repos/flows";
 import { listAgents, getDefaultAgent } from "@/lib/repos/agents";
 import { getSettings } from "@/lib/repos/settings";
 import { taskRunnable, type Runnable } from "@/lib/runnable";
+import { getActiveSpaceId } from "../active-space";
 import { TasksClient } from "./tasks-client";
 
 export const dynamic = "force-dynamic";
 
-export default function TasksPage() {
+export default async function TasksPage() {
   const database = db();
-  const flows = listFlows(database).map((f) => ({ id: f.id, name: f.name }));
-  const agents = listAgents(database).map((a) => ({ id: a.id, name: a.name }));
-  const defaultAgentId = getDefaultAgent(database).id;
-  const prefix = getSettings(database).task_prefix;
-  const tasks = listTasks(database);
+  const spaceId = await getActiveSpaceId(database);
+  const flows = listFlows(database, spaceId).map((f) => ({ id: f.id, name: f.name }));
+  const agents = listAgents(database, spaceId).map((a) => ({ id: a.id, name: a.name }));
+  const defaultAgentId = getDefaultAgent(database, spaceId).id;
+  const prefix = getSettings(database, spaceId).task_prefix;
+  const tasks = listTasks(database, spaceId);
   const runnable: Record<number, Runnable> = {};
   for (const t of tasks) runnable[t.id] = taskRunnable(database, t);
   return (

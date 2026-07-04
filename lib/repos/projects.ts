@@ -6,20 +6,31 @@ export interface ProjectInput {
   path: string;
 }
 
-export function createProject(db: Database, input: ProjectInput): Project {
+export function createProject(
+  db: Database,
+  spaceId: number,
+  input: ProjectInput,
+): Project {
   const now = new Date().toISOString();
   return db
     .query(
-      `INSERT INTO projects (name, path, created_at, updated_at)
-       VALUES ($name, $path, $now, $now) RETURNING *`,
+      `INSERT INTO projects (name, path, space_id, created_at, updated_at)
+       VALUES ($name, $path, $space, $now, $now) RETURNING *`,
     )
-    .get({ $name: input.name, $path: input.path, $now: now }) as Project;
+    .get({
+      $name: input.name,
+      $path: input.path,
+      $space: spaceId,
+      $now: now,
+    }) as Project;
 }
 
-export function listProjects(db: Database): Project[] {
+export function listProjects(db: Database, spaceId: number): Project[] {
   return db
-    .query("SELECT * FROM projects ORDER BY name COLLATE NOCASE")
-    .all() as Project[];
+    .query(
+      "SELECT * FROM projects WHERE space_id = ? ORDER BY name COLLATE NOCASE",
+    )
+    .all(spaceId) as Project[];
 }
 
 export function getProject(db: Database, id: number): Project | null {

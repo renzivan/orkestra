@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Settings } from "@/lib/types";
-import { saveSettings } from "../actions";
+import type { Settings, Space } from "@/lib/types";
+import { saveSettings, renameSpaceAction, deleteSpaceAction } from "../actions";
+import { useConfirm } from "../confirm-dialog";
 import { toast } from "../toast";
 
-export function SettingsClient({ settings }: { settings: Settings }) {
+export function SettingsClient({
+  settings,
+  spaces,
+  activeSpaceId,
+}: {
+  settings: Settings;
+  spaces: Space[];
+  activeSpaceId: number;
+}) {
   const router = useRouter();
   const [retries, setRetries] = useState(String(settings.retries));
   const [timeout, setTimeout] = useState(String(settings.step_timeout_seconds));
@@ -14,6 +23,8 @@ export function SettingsClient({ settings }: { settings: Settings }) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const activeSpace = spaces.find((s) => s.id === activeSpaceId);
 
   async function save() {
     const r = Number(retries);
@@ -45,7 +56,10 @@ export function SettingsClient({ settings }: { settings: Settings }) {
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p>Global run behavior.</p>
+          <p>
+            Run behavior for <strong>{activeSpace?.name ?? "this space"}</strong>.
+            Each space keeps its own settings.
+          </p>
         </div>
       </div>
 
@@ -110,6 +124,108 @@ export function SettingsClient({ settings }: { settings: Settings }) {
           </div>
         </div>
       </div>
+
+      <SpacesCard spaces={spaces} activeSpaceId={activeSpaceId} />
     </>
+  );
+}
+
+/** Manage spaces: rename any space, delete a space (with its data). Creating and
+ *  switching live in the sidebar switcher; this is the durable admin surface. */
+function SpacesCard({
+  spaces,
+  activeSpaceId,
+}: {
+  spaces: Space[];
+  activeSpaceId: number;
+}) {
+  const router = useRouter();
+  const { confirm, dialog } = useConfirm();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  // Draft names, keyed by space id, so each row's input is independently edited.
+  const [names, setNames] = useState<Record<number, string>>(() =>
+    Object.fromEntries(spaces.map((s) => [s.id, s.name])),
+  );
+
+  async function rename(id: number) {
+    const name = (names[id] ?? "").trim();
+    if (!name) return setError("Name required.");
+    setError("");
+    setBusy(true);
+    try {
+      await renameSpaceAction(id, name);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(s: Space) {
+    const ok = await confirm({
+      title: `Delete "${s.name}"?`,
+      message:
+        "This permanently deletes the space and everything in it — its projects, skills, agents, flows, and tasks. This can't be undone.",
+      confirmLabel: "Delete space",
+    });
+    if (!ok) return;
+    setError("");
+    setBusy(true);
+    try {
+      const res = await deleteSpaceAction(s.id);
+      if (!res.ok) setError(res.error);
+      else router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginTop: "var(--s-4)" }}>
+      <div className="stack">
+        <div>
+          <h2 style={{ margin: 0 }}>Spaces</h2>
+          <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>
+            Each space is fully isolated. Create and switch spaces from the
+            sidebar.
+          </p>
+        </div>
+        {spaces.map((s) => (
+          <div key={s.id} className="row" style={{ gap: 8, alignItems: "center" }}>
+            <input
+              type="text"
+              value={names[s.id] ?? ""}
+              disabled={busy}
+              onChange={(e) =>
+                setNames((n) => ({ ...n, [s.id]: e.target.value }))
+              }
+              style={{ maxWidth: 260 }}
+            />
+            {s.id === activeSpaceId && <span className="muted">active</span>}
+            <button
+              className="btn small"
+              disabled={busy}
+              onClick={() => rename(s.id)}
+            >
+              Rename
+            </button>
+            <button
+              className="btn small danger"
+              disabled={busy || spaces.length <= 1}
+              title={
+                spaces.length <= 1 ? "Can't delete the last space." : undefined
+              }
+              onClick={() => remove(s)}
+            >
+              Delete
+            </button>
+          </div>
+        ))}
+        {error && <div className="error">{error}</div>}
+      </div>
+      {dialog}
+    </div>
   );
 }

@@ -6,6 +6,8 @@ import * as Agents from "../lib/repos/agents";
 import { syncAdapters } from "../lib/adapters/sync";
 import type { AdapterPreset } from "../lib/adapters/presets";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 const PRESETS: AdapterPreset[] = [
   {
     name: "claude",
@@ -58,7 +60,7 @@ test("an uninstalled but referenced adapter is kept", () => {
   const db = openDb(":memory:");
   syncAdapters(db, { presets: PRESETS, isInstalled: () => true });
   const codex = Adapters.listAdapters(db).find((a) => a.name === "codex")!;
-  Agents.createAgent(db, {
+  Agents.createAgent(db, SPACE, {
     name: "user-of-codex",
     instructions: entryFile("b"),
     adapter_id: codex.id,

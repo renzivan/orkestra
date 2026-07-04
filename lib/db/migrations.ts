@@ -387,4 +387,158 @@ export const MIGRATIONS: string[][] = [
        SELECT id, 'AGENTS.md', base_instruction, 0, 1 FROM agents`,
     `ALTER TABLE agents DROP COLUMN base_instruction`,
   ],
+
+  // v13 — Spaces: top-level isolation in a single DB (Roadmap §1). A Space is a
+  // container; every top-level entity carries a space_id and is wiped when its
+  // Space is deleted. Switching the active Space is a pure view filter (a cookie
+  // in the app layer) — the engine never reads it, so a run in one Space keeps
+  // going while you view another.
+  //
+  // A single Space named 'ETel' is seeded to hold all existing data; because the
+  // spaces table is brand-new, that row's id is 1 on every database (fresh or
+  // upgraded), so backfills point every existing row at it. The five top-level
+  // tables (skills/projects/agents/flows/tasks) plus settings are rebuilt to add
+  // space_id — SQLite can't add a NOT NULL REFERENCES column or change a UNIQUE
+  // constraint in place — using the same create-new -> copy -> drop -> rename swap
+  // as v6/v8/v11 (FK enforcement off for the swap; ids preserved so every child
+  // FK stays intact, including agent_instructions -> agents from v12). Changes:
+  //   - name uniqueness is now per-Space: UNIQUE(name) -> UNIQUE(space_id, name),
+  //     so "Deploy" can exist in both a personal and a work Space.
+  //   - the single Default agent becomes one-per-Space: the agents_one_default
+  //     index moves from ON(is_default) to ON(space_id) WHERE is_default = 1.
+  //   - settings goes from a single row (id = 1) to one row per Space, keyed by
+  //     space_id; the existing row is copied onto the seeded Space.
+  //   - the tasks rebuild carries forward v11's 'paused' status in the CHECK.
+  //   - the agents rebuild has no base_instruction column (dropped in v12); the
+  //     agent_instructions rows survive the swap via preserved agent ids.
+  //   - runs/run_steps get no column — they inherit scope via the tasks FK.
+  //   - adapters stay global (detected from PATH, Space-independent).
+  // Explicit column lists (not SELECT *) keep the copies stable as columns grow.
+  [
+    `CREATE TABLE spaces (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(name)
+    )`,
+    `INSERT INTO spaces (name, created_at, updated_at)
+     VALUES ('ETel', strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+             strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+
+    `PRAGMA foreign_keys=OFF`,
+
+    // skills
+    `CREATE TABLE skills_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      body TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      UNIQUE(space_id, name)
+    )`,
+    `INSERT INTO skills_new (id, name, body, created_at, updated_at, space_id)
+     SELECT id, name, body, created_at, updated_at,
+            (SELECT id FROM spaces ORDER BY id LIMIT 1) FROM skills`,
+    `DROP TABLE skills`,
+    `ALTER TABLE skills_new RENAME TO skills`,
+
+    // projects
+    `CREATE TABLE projects_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      path TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      UNIQUE(space_id, name)
+    )`,
+    `INSERT INTO projects_new (id, name, path, created_at, updated_at, space_id)
+     SELECT id, name, path, created_at, updated_at,
+            (SELECT id FROM spaces ORDER BY id LIMIT 1) FROM projects`,
+    `DROP TABLE projects`,
+    `ALTER TABLE projects_new RENAME TO projects`,
+
+    // agents — base_instruction was dropped in v12; keeps the v8 nullable/SET-NULL
+    // adapter_id and the v2/v5/v9 trailing columns; space_id appended; unique name
+    // scoped per Space. agent_instructions rows are untouched (agent ids preserved).
+    `CREATE TABLE agents_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      adapter_id INTEGER REFERENCES adapters(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT 'sonnet',
+      effort TEXT NOT NULL DEFAULT '',
+      skip_permissions INTEGER NOT NULL DEFAULT 1,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      UNIQUE(space_id, name)
+    )`,
+    `INSERT INTO agents_new
+       (id, name, adapter_id, created_at, updated_at,
+        model, effort, skip_permissions, is_default, space_id)
+     SELECT id, name, adapter_id, created_at, updated_at,
+            model, effort, skip_permissions, is_default,
+            (SELECT id FROM spaces ORDER BY id LIMIT 1) FROM agents`,
+    `DROP TABLE agents`,
+    `ALTER TABLE agents_new RENAME TO agents`,
+    // One Default agent per Space (was one globally).
+    `CREATE UNIQUE INDEX agents_one_default ON agents(space_id) WHERE is_default = 1`,
+
+    // flows
+    `CREATE TABLE flows_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL COLLATE NOCASE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      UNIQUE(space_id, name)
+    )`,
+    `INSERT INTO flows_new (id, name, created_at, updated_at, space_id)
+     SELECT id, name, created_at, updated_at,
+            (SELECT id FROM spaces ORDER BY id LIMIT 1) FROM flows`,
+    `DROP TABLE flows`,
+    `ALTER TABLE flows_new RENAME TO flows`,
+
+    // tasks — preserves v11's 'paused' CHECK and v10's unread columns; adds space_id.
+    `CREATE TABLE tasks_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      target_type TEXT NOT NULL CHECK (target_type IN ('flow','agent')),
+      target_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','running','succeeded','failed','stopped','paused')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      settled_at TEXT,
+      seen_at TEXT,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE
+    )`,
+    `INSERT INTO tasks_new
+       (id, title, body, target_type, target_id, status, created_at, updated_at,
+        settled_at, seen_at, space_id)
+     SELECT id, title, body, target_type, target_id, status, created_at,
+            updated_at, settled_at, seen_at,
+            (SELECT id FROM spaces ORDER BY id LIMIT 1) FROM tasks`,
+    `DROP TABLE tasks`,
+    `ALTER TABLE tasks_new RENAME TO tasks`,
+
+    // settings — from a single row (id = 1) to one row per Space.
+    `CREATE TABLE settings_new (
+      space_id INTEGER PRIMARY KEY REFERENCES spaces(id) ON DELETE CASCADE,
+      retries INTEGER NOT NULL DEFAULT 1,
+      step_timeout_seconds INTEGER NOT NULL DEFAULT 600,
+      task_prefix TEXT NOT NULL DEFAULT ''
+    )`,
+    `INSERT INTO settings_new (space_id, retries, step_timeout_seconds, task_prefix)
+     SELECT (SELECT id FROM spaces ORDER BY id LIMIT 1),
+            retries, step_timeout_seconds, task_prefix FROM settings`,
+    `DROP TABLE settings`,
+    `ALTER TABLE settings_new RENAME TO settings`,
+
+    `PRAGMA foreign_keys=ON`,
+  ],
 ];

@@ -3,8 +3,8 @@ import { loadAgentChoices } from "../choices";
 
 export const dynamic = "force-dynamic";
 
-export default function NewAgentPage() {
-  const { adapters, skills, projects } = loadAgentChoices();
+export default async function NewAgentPage() {
+  const { adapters, skills, projects } = await loadAgentChoices();
   return (
     <AgentForm
       agent={null}

@@ -7,9 +7,11 @@ import * as Adapters from "../../lib/repos/adapters";
 import * as Skills from "../../lib/repos/skills";
 import * as Tasks from "../../lib/repos/tasks";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 test("a Default agent is seeded, empty, adapterless, and marked is_default", () => {
   const db = openDb(":memory:");
-  const def = Agents.getDefaultAgent(db);
+  const def = Agents.getDefaultAgent(db, SPACE);
   expect(def.name).toBe("Default");
   expect(def.is_default).toBe(true);
   // Seeded with a single empty ENTRY file (migrated from its empty base instruction).
@@ -35,7 +37,7 @@ test("there is exactly one default agent", () => {
 
 test("the default agent cannot be deleted", () => {
   const db = openDb(":memory:");
-  const def = Agents.getDefaultAgent(db);
+  const def = Agents.getDefaultAgent(db, SPACE);
   expect(() => Agents.deleteAgent(db, def.id)).toThrow(
     /default agent can't be deleted/i,
   );
@@ -45,7 +47,7 @@ test("the default agent cannot be deleted", () => {
 test("createAgent never marks a new agent as default", () => {
   const db = openDb(":memory:");
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
-  const a = Agents.createAgent(db, {
+  const a = Agents.createAgent(db, SPACE, {
     name: "planner",
     instructions: entryFile(""),
     adapter_id: ad.id,
@@ -59,9 +61,9 @@ test("createAgent never marks a new agent as default", () => {
 
 test("deleting a normal agent reassigns its tasks to the Default agent", () => {
   const db = openDb(":memory:");
-  const def = Agents.getDefaultAgent(db);
+  const def = Agents.getDefaultAgent(db, SPACE);
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
-  const a = Agents.createAgent(db, {
+  const a = Agents.createAgent(db, SPACE, {
     name: "planner",
     instructions: entryFile("x"),
     adapter_id: ad.id,
@@ -70,7 +72,7 @@ test("deleting a normal agent reassigns its tasks to the Default agent", () => {
     skill_ids: [],
     project_ids: [],
   });
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "b",
     target_type: "agent",
@@ -87,22 +89,22 @@ test("deleting a normal agent reassigns its tasks to the Default agent", () => {
 
 test("the default agent is scoped to all projects, including ones added later", () => {
   const db = openDb(":memory:");
-  expect(Agents.getDefaultAgent(db).projects.length).toBe(0);
+  expect(Agents.getDefaultAgent(db, SPACE).projects.length).toBe(0);
 
-  Projects.createProject(db, { name: "app", path: "/app" });
-  Projects.createProject(db, { name: "web", path: "/web" });
+  Projects.createProject(db, SPACE, { name: "app", path: "/app" });
+  Projects.createProject(db, SPACE, { name: "web", path: "/web" });
 
-  const after = Agents.getDefaultAgent(db);
+  const after = Agents.getDefaultAgent(db, SPACE);
   expect(after.projects.map((p) => p.name)).toEqual(["app", "web"]);
 });
 
 test("updateAgent on the default keeps its name + is_default and ignores projects", () => {
   const db = openDb(":memory:");
-  const def = Agents.getDefaultAgent(db);
+  const def = Agents.getDefaultAgent(db, SPACE);
   const ad = Adapters.createAdapter(db, { name: "claude", command: "c {input}" });
-  const p1 = Projects.createProject(db, { name: "app", path: "/app" });
-  Projects.createProject(db, { name: "web", path: "/web" });
-  const s = Skills.createSkill(db, { name: "plan", body: "Plan." });
+  const p1 = Projects.createProject(db, SPACE, { name: "app", path: "/app" });
+  Projects.createProject(db, SPACE, { name: "web", path: "/web" });
+  const s = Skills.createSkill(db, SPACE, { name: "plan", body: "Plan." });
 
   Agents.updateAgent(db, def.id, {
     name: "Renamed", // ignored — stays "Default"
@@ -114,7 +116,7 @@ test("updateAgent on the default keeps its name + is_default and ignores project
     project_ids: [p1.id], // ignored — default stays all-projects
   });
 
-  const got = Agents.getDefaultAgent(db);
+  const got = Agents.getDefaultAgent(db, SPACE);
   expect(got.name).toBe("Default");
   expect(got.is_default).toBe(true);
   expect(got.instructions.map((i) => i.body)).toEqual(["hello"]);

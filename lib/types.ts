@@ -1,3 +1,10 @@
+export interface Space {
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Skill {
   id: number;
   name: string;
@@ -84,6 +91,9 @@ export interface Task {
   target_type: TargetType;
   target_id: number;
   status: TaskStatus;
+  /** The Space this task belongs to; the runner reads it to resolve per-Space
+   *  settings. Isolation lives at the read/list layer, not on this row. */
+  space_id: number;
   created_at: string;
   updated_at: string;
   // Set when the task last entered a terminal status (succeeded/failed/stopped).

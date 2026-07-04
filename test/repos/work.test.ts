@@ -4,9 +4,11 @@ import * as Tasks from "../../lib/repos/tasks";
 import * as Runs from "../../lib/repos/runs";
 import * as Settings from "../../lib/repos/settings";
 
+const SPACE = 1; // seeded "ETel" space (migration v12)
+
 test("task status transitions", () => {
   const db = openDb(":memory:");
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "Fix bug",
     body: "do it",
     target_type: "agent",
@@ -15,12 +17,12 @@ test("task status transitions", () => {
   expect(t.status).toBe("pending");
   Tasks.setTaskStatus(db, t.id, "running");
   expect(Tasks.getTask(db, t.id)!.status).toBe("running");
-  expect(Tasks.listTasks(db).length).toBe(1);
+  expect(Tasks.listTasks(db, SPACE).length).toBe(1);
 });
 
 test("run + steps round-trip", () => {
   const db = openDb(":memory:");
-  const t = Tasks.createTask(db, {
+  const t = Tasks.createTask(db, SPACE, {
     title: "T",
     body: "in",
     target_type: "flow",
@@ -56,19 +58,19 @@ test("run + steps round-trip", () => {
 
 test("settings get/update", () => {
   const db = openDb(":memory:");
-  expect(Settings.getSettings(db)).toEqual({
+  expect(Settings.getSettings(db, SPACE)).toEqual({
     retries: 1,
     step_timeout_seconds: 600,
     task_prefix: "",
   });
-  Settings.updateSettings(db, { retries: 3, step_timeout_seconds: 120 });
-  expect(Settings.getSettings(db)).toEqual({
+  Settings.updateSettings(db, SPACE, { retries: 3, step_timeout_seconds: 120 });
+  expect(Settings.getSettings(db, SPACE)).toEqual({
     retries: 3,
     step_timeout_seconds: 120,
     task_prefix: "",
   });
-  Settings.updateSettings(db, { task_prefix: "ENG" });
-  expect(Settings.getSettings(db).task_prefix).toBe("ENG");
+  Settings.updateSettings(db, SPACE, { task_prefix: "ENG" });
+  expect(Settings.getSettings(db, SPACE).task_prefix).toBe("ENG");
 });
 
 test("taskLabel formats with prefix, falls back to title", () => {

@@ -91,6 +91,114 @@ a:hover {
   /* lighter than --muted, for section titles and icons */
   --nav-dim: color-mix(in srgb, var(--muted) 60%, #f5f3ec);
 }
+
+/* Space switcher — top of the sidebar. */
+.space-switcher {
+  position: relative;
+  margin: 0 var(--s-2) var(--s-3);
+}
+.space-current {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--fg);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.space-current:hover {
+  border-color: var(--muted);
+}
+.space-current .space-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.space-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: var(--s-1);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* dropdown header — same type treatment as sidebar section titles */
+.space-menu-label {
+  padding: var(--s-1) var(--s-3) var(--s-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nav-dim);
+}
+.space-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+.space-menu-item:hover {
+  background: var(--accent);
+}
+.space-current:focus,
+.space-menu-item:focus {
+  outline: none;
+}
+.space-current:focus-visible,
+.space-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.space-menu-item.active {
+  font-weight: 600;
+  background: var(--accent);
+}
+.space-menu-item .space-check {
+  color: var(--muted);
+}
+.space-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.space-menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: var(--s-1) 0;
+}
+.space-create {
+  display: flex;
+  gap: var(--s-1);
+  padding: var(--s-1);
+}
+.space-create input {
+  flex: 1;
+  min-width: 0;
+}
+.space-error {
+  margin: var(--s-1);
+  font-size: 13px;
+}
 .nav a {
   color: var(--fg);
   padding: var(--s-2) var(--s-3);
