@@ -1,16 +1,22 @@
 :root {
-  --bg: #faf9f5;
+  --bg: #fafafa;
   --panel: #ffffff;
-  --fg: #141413;
-  --muted: #6b6862;
-  --accent: #eceae4;
-  --accent-ink: #4a4843;
-  --line: #e8e5dd;
-  --line-strong: #d9d5ca;
-  --success: #4a7c59;
-  --warning: #c28b2d;
-  --danger: #b54848;
-  --info: #4a6b8a;
+  --fg: #18181b;
+  --muted: #71717a;
+  /* subtle neutral highlight for active nav / chips (was a warm cream) */
+  --accent: #f1f1f0;
+  --accent-ink: #18181b;
+  --line: #e6e6e4;
+  --line-strong: #d6d6d3;
+  /* orange is the single brand accent — logo, focus rings, live-work spinner */
+  --brand: #f06e22;
+  /* primary action is near-black with white ink (Sentinel-style) */
+  --primary: #18181b;
+  --primary-ink: #ffffff;
+  --success: #17935a;
+  --warning: #b8860b;
+  --danger: #dc2626;
+  --info: #2563eb;
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 16px;
@@ -62,7 +68,7 @@ a:hover {
 }
 .sidebar {
   border-right: 1px solid var(--line);
-  background: #f5f3ec;
+  background: #f7f7f6;
   padding: var(--s-4) var(--s-3);
   position: sticky;
   top: 0;
@@ -76,20 +82,22 @@ a:hover {
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  /* wordmark stays ink-black; only the mark carries the brand green */
+  color: var(--fg);
 }
-.brand .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--accent);
-  display: inline-block;
+.brand:hover {
+  text-decoration: none;
+}
+.brand .logo {
+  flex: none;
+  color: var(--brand);
 }
 .nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
   /* lighter than --muted, for section titles and icons */
-  --nav-dim: color-mix(in srgb, var(--muted) 60%, #f5f3ec);
+  --nav-dim: color-mix(in srgb, var(--muted) 60%, #f7f7f6);
 }
 
 /* Space switcher — top of the sidebar. */
@@ -167,7 +175,7 @@ a:hover {
 }
 .space-current:focus-visible,
 .space-menu-item:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--brand);
   outline-offset: -1px;
 }
 .space-menu-item.active {
@@ -206,7 +214,7 @@ a:hover {
   font-weight: 400;
 }
 .nav a:hover {
-  background: #ece9e0;
+  background: #efefee;
   text-decoration: none;
 }
 .nav a.active {
@@ -254,7 +262,7 @@ a:hover {
   text-align: left;
 }
 .nav-group-toggle:hover {
-  background: #ece9e0;
+  background: #efefee;
 }
 /* static section header: no caret, always shown; aligns with toggle labels */
 .nav-group-label {
@@ -287,7 +295,7 @@ a:hover {
   border-radius: var(--r-md);
 }
 .nav-add:hover {
-  background: #ece9e0;
+  background: #efefee;
   color: var(--fg);
   text-decoration: none;
 }
@@ -309,7 +317,7 @@ a:hover {
   text-overflow: ellipsis;
 }
 .nav-sub a:hover {
-  background: #ece9e0;
+  background: #efefee;
   text-decoration: none;
 }
 .nav-sub a.active {
@@ -444,9 +452,9 @@ textarea {
 input:focus,
 textarea:focus,
 select:focus {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--brand);
   outline-offset: -1px;
-  border-color: var(--accent);
+  border-color: var(--brand);
 }
 .btn {
   font: inherit;
@@ -459,16 +467,16 @@ select:focus {
   cursor: pointer;
 }
 .btn:hover {
-  background: #f3f1ea;
+  background: #f4f4f3;
 }
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--fg);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
 }
 .btn.primary:hover {
-  background: #ffdcd0;
-  border-color: #ffdcd0;
+  background: #000000;
+  border-color: #000000;
 }
 .btn.danger {
   color: var(--danger);
@@ -534,7 +542,7 @@ th {
 }
 .badge.pending {
   color: var(--muted);
-  background: #f2f1ec;
+  background: #f4f4f3;
 }
 .badge.running {
   color: var(--info);
@@ -553,7 +561,7 @@ th {
 }
 .badge.stopped {
   color: var(--muted);
-  background: #f2f1ec;
+  background: #f4f4f3;
   border-color: color-mix(in srgb, var(--muted) 25%, var(--line));
 }
 .badge.paused {
@@ -594,7 +602,7 @@ th {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f0eee7;
+  background: #f0f0ef;
   border: 1px solid var(--line);
 }
 .empty {
@@ -628,7 +636,7 @@ th {
 }
 
 pre.output {
-  background: #f6f4ee;
+  background: #f6f6f5;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: var(--s-3);
@@ -727,7 +735,7 @@ pre.output {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
-  background: #f6f4ee;
+  background: #f6f6f5;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   padding: var(--s-1) var(--s-2);
@@ -776,7 +784,7 @@ pre.output {
   font-family: var(--mono);
   font-size: 12.5px;
   line-height: 1.5;
-  background: #f6f4ee;
+  background: #f6f6f5;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: var(--s-2) var(--s-3);
@@ -798,7 +806,7 @@ pre.output {
 .spin {
   display: inline-block;
   animation: spin 1.1s linear infinite;
-  color: var(--accent);
+  color: var(--brand);
 }
 @keyframes spin {
   to {
@@ -832,7 +840,7 @@ pre.output {
   flex: 0 0 264px;
   display: flex;
   flex-direction: column;
-  background: #f5f3ec;
+  background: #f7f7f6;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   min-height: 120px;
@@ -929,7 +937,7 @@ pre.output {
   transition: background 0.12s ease, transform 0.12s ease;
 }
 .to-top:hover {
-  background: #f5f3ec;
+  background: #f7f7f6;
   transform: translateY(-1px);
 }
 .task-card.draggable {

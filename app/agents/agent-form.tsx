@@ -448,7 +448,7 @@ export function AgentForm({ agent, adapters, skills, projects, usage }: Props) {
                           cursor: "pointer",
                           minWidth: 0,
                           background:
-                            i === selected ? "#f6f4ee" : "var(--panel)",
+                            i === selected ? "#f6f6f5" : "var(--panel)",
                           boxShadow:
                             i === selected
                               ? "inset 0 0 0 1px var(--line-strong)"

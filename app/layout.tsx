@@ -11,6 +11,7 @@ import { listSpaces } from "@/lib/repos/spaces";
 import { getActiveSpaceId } from "./active-space";
 import { Nav, type NavGroup } from "./nav";
 import { Toaster } from "./toast";
+import { Logo } from "./logo";
 
 export const metadata: Metadata = {
   title: "Orkestra",
@@ -41,7 +42,7 @@ export default async function RootLayout({
         <div className="shell">
           <aside className="sidebar">
             <Link href="/tasks" className="brand">
-              <span className="dot" />
+              <Logo size={22} />
               Orkestra
             </Link>
             <Nav
