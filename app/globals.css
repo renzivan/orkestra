@@ -567,6 +567,24 @@ th {
   font-size: 12px;
 }
 
+/* Token-usage readout: per step (under the answer), per run (in the head), per
+   agent lifetime (under the form subtitle), and a total-only line on the task
+   card. A labelled total over a per-kind breakdown. Quiet by design — it
+   informs, it doesn't compete with the content. */
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--s-2);
+  font-size: 12px;
+}
+.usage-total {
+  font-weight: 600;
+}
+.task-card .usage {
+  margin-top: 0;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

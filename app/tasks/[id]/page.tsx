@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getTask, taskLabel } from "@/lib/repos/tasks";
-import { latestRunForTask, getRunWithSteps } from "@/lib/repos/runs";
+import { latestRunForTask, getRunWithSteps, runUsage } from "@/lib/repos/runs";
 import { getSettings } from "@/lib/repos/settings";
 import { taskRunnable } from "@/lib/runnable";
 import { RunView } from "./run-view";
@@ -22,6 +22,7 @@ export default async function TaskDetailPage({
 
   const latest = latestRunForTask(database, task.id);
   const run = latest ? getRunWithSteps(database, latest.id) : null;
+  const usage = run ? runUsage(database, run.id) : null;
   // Prefix comes from the task's own Space, not the active one — a task detail
   // page can be opened while a different Space is active.
   const prefix = getSettings(database, task.space_id).task_prefix;
@@ -47,7 +48,12 @@ export default async function TaskDetailPage({
         </div>
       </div>
 
-      <RunView task={task} initialRun={run} runnable={runnable} />
+      <RunView
+        task={task}
+        initialRun={run}
+        initialUsage={usage}
+        runnable={runnable}
+      />
     </>
   );
 }

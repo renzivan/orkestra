@@ -354,3 +354,63 @@ test("a run uses its own Space's settings, not another Space's", async () => {
   expect(attempts).toBe(1);
   rmSync(counter);
 });
+
+const USAGE = "bash test/fixtures/usage-model.sh stream-json";
+
+test("a step captures the token usage its CLI reported", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "usage", command: USAGE });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, SPACE, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const run = await runTask(db, t.id);
+
+  expect(run.status).toBe("succeeded");
+  const step = Runs.getRunWithSteps(db, run.id).steps[0];
+  expect(step.input_tokens).toBe(11);
+  expect(step.output_tokens).toBe(22);
+  expect(step.cache_creation_tokens).toBe(3);
+  expect(step.cache_read_tokens).toBe(4);
+  // the run total mirrors its single step
+  expect(Runs.runUsage(db, run.id)).toEqual({
+    input_tokens: 11,
+    output_tokens: 22,
+    cache_creation_tokens: 3,
+    cache_read_tokens: 4,
+  });
+});
+
+test("a retried step keeps the successful attempt's usage, not the first attempt's", async () => {
+  const db = openDb(":memory:");
+  const counter = join(tmpdir(), `ork-usage-retry-${process.pid}-${Date.now()}`);
+  if (existsSync(counter)) rmSync(counter);
+  Settings.updateSettings(db, SPACE, { retries: 1, step_timeout_seconds: 5 });
+
+  const m = Adapters.createAdapter(db, {
+    name: "retry-usage",
+    command: `bash test/fixtures/retry-usage-model.sh ${counter} stream-json`,
+  });
+  const a = agent(db, "flaky", m.id);
+  const t = Tasks.createTask(db, SPACE, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+
+  const run = await runTask(db, t.id);
+
+  expect(run.status).toBe("succeeded");
+  const step = Runs.getRunWithSteps(db, run.id).steps[0];
+  // second (successful) attempt's usage, not the first attempt's {1,1,1,1}
+  expect(step.input_tokens).toBe(50);
+  expect(step.output_tokens).toBe(60);
+  expect(step.cache_creation_tokens).toBe(0);
+  expect(step.cache_read_tokens).toBe(0);
+  rmSync(counter);
+});

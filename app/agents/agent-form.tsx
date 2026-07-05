@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Agent, Project, Skill } from "@/lib/types";
+import type { Agent, Project, Skill, Usage } from "@/lib/types";
 import { saveAgent, deleteAgentAction } from "../actions";
 import { deleteConfirmMessage } from "../delete-warning";
 import { useConfirm } from "../confirm-dialog";
 import { toast } from "../toast";
+import { UsageBadge } from "../usage-badge";
 
 export interface AdapterChoice {
   id: number;
@@ -21,6 +22,9 @@ interface Props {
   adapters: AdapterChoice[];
   skills: Skill[];
   projects: Project[];
+  /** The agent's lifetime token usage summed across all its runs. Null for a
+   *  new agent or one that has never reported usage. */
+  usage?: Usage | null;
 }
 
 /** One instruction file being edited in the form. Position is the array index;
@@ -61,7 +65,7 @@ function formatSize(n: number): string {
   return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K`;
 }
 
-export function AgentForm({ agent, adapters, skills, projects }: Props) {
+export function AgentForm({ agent, adapters, skills, projects, usage }: Props) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
   // The built-in Default agent: its name is locked, it can't be deleted, and it
@@ -245,6 +249,7 @@ export function AgentForm({ agent, adapters, skills, projects }: Props) {
             Instruction files + optional skills + projects, running on an
             adapter.
           </p>
+          {usage && <UsageBadge usage={usage} label="lifetime" />}
         </div>
         {agent && !isDefault && (
           <button className="btn small danger" onClick={remove} disabled={busy}>

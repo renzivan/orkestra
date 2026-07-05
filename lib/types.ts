@@ -115,11 +115,26 @@ export interface RunStep {
   transcript: string;
   /** CLI session id, if captured — lets a finished run be resumed with a reply. */
   session_id: string | null;
+  /** Token usage the CLI reported for this step's invocation. All four are NULL
+   *  together when the adapter reported none (distinct from a real 0). */
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_creation_tokens: number | null;
+  cache_read_tokens: number | null;
   exit_code: number | null;
   error: string | null;
   status: RunStatus;
   started_at: string;
   finished_at: string | null;
+}
+
+// Token usage reported by a CLI for one invocation. Cache reads usually dominate
+// a Claude run, so the four counts are kept apart rather than summed to a total.
+export interface Usage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
 }
 
 export interface Run {

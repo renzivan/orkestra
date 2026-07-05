@@ -7,6 +7,9 @@
 // assistant's answer text ONLY (the `text` entries). Thinking and tool activity
 // are transcript-only — never chained.
 
+import type { Usage } from "../types";
+export type { Usage };
+
 export type TranscriptEntry =
   | { kind: "thinking"; text: string }
   | { kind: "text"; text: string }
@@ -27,6 +30,9 @@ export interface StreamTransform {
   entries(): TranscriptEntry[];
   /** CLI session id seen in the stream (""), for resuming the conversation. */
   sessionId(): string;
+  /** Token usage the CLI reported for this invocation, or null if it reported
+   *  none (e.g. a plain-text CLI, or a stream that never emitted a usage). */
+  usage(): Usage | null;
 }
 
 /** Plain-text CLIs: stdout IS the answer; the transcript is one growing block. */
@@ -43,7 +49,13 @@ export function passthrough(onChange?: () => void): StreamTransform {
     onChange?.();
     return raw;
   };
-  return { push: feed, end: () => "", entries: () => list, sessionId: () => "" };
+  return {
+    push: feed,
+    end: () => "",
+    entries: () => list,
+    sessionId: () => "",
+    usage: () => null,
+  };
 }
 
 /**
@@ -56,6 +68,7 @@ export function claudeStream(onChange?: () => void): StreamTransform {
   const list: TranscriptEntry[] = [];
   let buffer = "";
   let sessionId = "";
+  let usage: Usage | null = null;
   // Content-block index -> entry, for the CURRENT assistant message. Block
   // indices restart at 0 each message, so this is cleared on message_start.
   let openByIndex = new Map<number, TranscriptEntry>();
@@ -87,7 +100,13 @@ export function claudeStream(onChange?: () => void): StreamTransform {
       handleToolResults(obj);
       return "";
     }
-    return ""; // system / result / rate_limit_event / hooks — not transcript
+    if (type === "result") {
+      // The final result line reports this invocation's token usage. It is not
+      // transcript activity, but it is the authoritative usage total — capture it.
+      usage = parseUsage(obj.usage);
+      return "";
+    }
+    return ""; // system / rate_limit_event / hooks — not transcript
   };
 
   const handleStreamEvent = (ev: Record<string, unknown>): string => {
@@ -192,6 +211,22 @@ export function claudeStream(onChange?: () => void): StreamTransform {
     },
     entries: () => list,
     sessionId: () => sessionId,
+    usage: () => usage,
+  };
+}
+
+// Map Claude's result `usage` object onto our Usage shape. Its cache counts are
+// named cache_*_input_tokens; a missing field defaults to 0. Returns null when
+// there is no usage object at all, so "reported none" stays distinct from zeros.
+function parseUsage(raw: unknown): Usage | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const u = raw as Record<string, unknown>;
+  const count = (v: unknown): number => (typeof v === "number" ? v : 0);
+  return {
+    input_tokens: count(u.input_tokens),
+    output_tokens: count(u.output_tokens),
+    cache_creation_tokens: count(u.cache_creation_input_tokens),
+    cache_read_tokens: count(u.cache_read_input_tokens),
   };
 }
 

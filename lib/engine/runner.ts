@@ -13,6 +13,7 @@ import {
   claudeStream,
   type StreamTransform,
   type TranscriptEntry,
+  type Usage,
 } from "./transcript";
 import { publish, publishTasksChanged } from "./bus";
 import {
@@ -270,7 +271,7 @@ async function executeStep(
     input: opts.input,
   });
 
-  const { result, sessionId } = await attemptWithRetries(
+  const { result, sessionId, usage } = await attemptWithRetries(
     argv,
     opts.input,
     settings.step_timeout_seconds * 1000,
@@ -286,6 +287,7 @@ async function executeStep(
   );
   clearProc(runId);
   if (sessionId) Runs.setStepSession(db, stepId, sessionId);
+  if (usage) Runs.setStepUsage(db, stepId, usage);
 
   // A user halt killed the process — record the step as paused or stopped (not
   // failed) per the halt intent, and let the caller wind the run down. The abort
@@ -383,11 +385,15 @@ async function attemptWithRetries(
   // A fresh, stateful transform per attempt whose onChange reports the live
   // transcript. Declared with `let` so the onChange closure can read it back.
   let sessionId = "";
+  // Usage from the LAST attempt (plain reassign, not `||` like sessionId): a
+  // retried step should report the successful attempt's usage, never a sum.
+  let usage: Usage | null = null;
   const attempt = async () => {
     let transform: StreamTransform;
     transform = makeTransform(() => onTranscript(transform.entries()));
     const r = await runStep({ argv, input, timeoutMs, transform, onSpawn });
     sessionId = transform.sessionId() || sessionId;
+    usage = transform.usage();
     return r;
   };
   beforeAttempt();
@@ -400,7 +406,7 @@ async function attemptWithRetries(
     beforeAttempt();
     result = await attempt();
   }
-  return { result, sessionId };
+  return { result, sessionId, usage };
 }
 
 /** Choose how to decode a CLI's stdout: parse stream-json, else passthrough. */

@@ -3,6 +3,7 @@ import { listTasks } from "@/lib/repos/tasks";
 import { listFlows } from "@/lib/repos/flows";
 import { listAgents, getDefaultAgent } from "@/lib/repos/agents";
 import { getSettings } from "@/lib/repos/settings";
+import { latestRunUsageByTask } from "@/lib/repos/runs";
 import { taskRunnable, type Runnable } from "@/lib/runnable";
 import { getActiveSpaceId } from "../active-space";
 import { TasksClient } from "./tasks-client";
@@ -19,6 +20,7 @@ export default async function TasksPage() {
   const tasks = listTasks(database, spaceId);
   const runnable: Record<number, Runnable> = {};
   for (const t of tasks) runnable[t.id] = taskRunnable(database, t);
+  const usage = latestRunUsageByTask(database, spaceId);
   return (
     <TasksClient
       tasks={tasks}
@@ -27,6 +29,7 @@ export default async function TasksPage() {
       defaultAgentId={defaultAgentId}
       prefix={prefix}
       runnable={runnable}
+      usage={usage}
     />
   );
 }

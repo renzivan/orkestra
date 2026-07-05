@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Task } from "@/lib/types";
+import type { Task, Usage } from "@/lib/types";
 import type { Runnable } from "@/lib/runnable";
 import type { RunWithSteps } from "@/lib/repos/runs";
 import type { TranscriptEntry } from "@/lib/engine/transcript";
+import { UsageBadge } from "../../usage-badge";
 import {
   runTaskAction,
   replyToRunAction,
@@ -22,6 +23,34 @@ interface StepView {
   entries: TranscriptEntry[];
   status: string;
   exit_code: number | null;
+  // Token usage for this step, or null while it is still running / the adapter
+  // reported none. Populated from the persisted run (a live step gets its counts
+  // when the run settles and the view refreshes), never from a stream event.
+  usage: Usage | null;
+}
+
+// Assemble a step's four token columns into a Usage, or null if none reported
+// (all NULL together — see the run_steps schema / migration v14).
+function stepUsage(s: {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_creation_tokens: number | null;
+  cache_read_tokens: number | null;
+}): Usage | null {
+  if (
+    s.input_tokens === null &&
+    s.output_tokens === null &&
+    s.cache_creation_tokens === null &&
+    s.cache_read_tokens === null
+  ) {
+    return null;
+  }
+  return {
+    input_tokens: s.input_tokens ?? 0,
+    output_tokens: s.output_tokens ?? 0,
+    cache_creation_tokens: s.cache_creation_tokens ?? 0,
+    cache_read_tokens: s.cache_read_tokens ?? 0,
+  };
 }
 
 function parseTranscript(json: string): TranscriptEntry[] {
@@ -51,6 +80,7 @@ function seedSteps(run: RunWithSteps | null): Record<number, StepView> {
       entries: parseTranscript(s.transcript),
       status: s.status,
       exit_code: s.exit_code,
+      usage: stepUsage(s),
     };
   }
   return seed;
@@ -59,10 +89,15 @@ function seedSteps(run: RunWithSteps | null): Record<number, StepView> {
 export function RunView({
   task,
   initialRun,
+  initialUsage,
   runnable,
 }: {
   task: Task;
   initialRun: RunWithSteps | null;
+  // The run's summed token usage at page load. Recomputed server-side on every
+  // refresh (including the one the stream's 'done' triggers), so a just-finished
+  // run's total appears without a manual reload. Null when nothing was reported.
+  initialUsage: Usage | null;
   runnable: Runnable;
 }) {
   const router = useRouter();
@@ -116,6 +151,7 @@ export function RunView({
                   entries: [],
                   status: "running",
                   exit_code: null,
+                  usage: null,
                 },
               },
         );
@@ -155,6 +191,29 @@ export function RunView({
 
     return () => es.close();
   }, [initialRun, router, task.id]);
+
+  // Token usage is only known once a step ends, so the live stream never carries
+  // it (step/transcript/step_done events have none). When the run settles, the
+  // 'done' handler refreshes and a fresh initialRun arrives with usage on its
+  // persisted steps — merge that into the steps we built from the stream, so the
+  // per-step badges appear without a manual reload. Fills only where missing, so
+  // a fresh load (already seeded with usage) and a re-render are both no-ops.
+  useEffect(() => {
+    if (!initialRun) return;
+    setSteps((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const s of initialRun.steps) {
+        const u = stepUsage(s);
+        const cur = next[s.position];
+        if (cur && u && cur.usage === null) {
+          next[s.position] = { ...cur, usage: u };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [initialRun]);
 
   // Opening an already-settled task clears it from the sidebar unread badge. A
   // live run is cleared by the stream's 'done' handler instead, so skip it here
@@ -261,6 +320,7 @@ export function RunView({
               can’t run: {runnable.reason}
             </span>
           )}
+          {!streaming && <UsageBadge usage={initialUsage} />}
         </div>
         {streaming ? (
           <div className="row">
@@ -342,6 +402,7 @@ export function RunView({
               {s.status === "stopped" && (
                 <div className="muted mono stopped-note">stopped</div>
               )}
+              <UsageBadge usage={s.usage} />
             </div>
           </div>
         );

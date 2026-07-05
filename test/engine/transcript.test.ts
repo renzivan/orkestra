@@ -131,3 +131,50 @@ test("claudeStream captures the session id from the stream", () => {
   t.push(line({ type: "system", subtype: "init", session_id: "sess-abc" }));
   expect(t.sessionId()).toBe("sess-abc");
 });
+
+test("claudeStream: usage() is null until a result line, then maps token counts", () => {
+  const t = claudeStream();
+  expect(t.usage()).toBeNull();
+  t.push(
+    line({
+      type: "result",
+      subtype: "success",
+      usage: {
+        input_tokens: 123,
+        output_tokens: 456,
+        cache_creation_input_tokens: 78,
+        cache_read_input_tokens: 90,
+      },
+    }),
+  );
+  // The CLI's cache_*_input_tokens map onto our cache_* names.
+  expect(t.usage()).toEqual({
+    input_tokens: 123,
+    output_tokens: 456,
+    cache_creation_tokens: 78,
+    cache_read_tokens: 90,
+  });
+});
+
+test("claudeStream: a result line missing a usage field defaults it to 0", () => {
+  const t = claudeStream();
+  t.push(
+    line({ type: "result", subtype: "success", usage: { input_tokens: 5 } }),
+  );
+  expect(t.usage()).toEqual({
+    input_tokens: 5,
+    output_tokens: 0,
+    cache_creation_tokens: 0,
+    cache_read_tokens: 0,
+  });
+});
+
+test("claudeStream: a result line with no usage object leaves usage() null", () => {
+  const t = claudeStream();
+  t.push(line({ type: "result", subtype: "success" }));
+  expect(t.usage()).toBeNull();
+});
+
+test("passthrough: usage() is always null (a plain-text CLI reports none)", () => {
+  expect(passthrough().usage()).toBeNull();
+});

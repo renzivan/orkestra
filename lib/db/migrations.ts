@@ -541,4 +541,15 @@ export const MIGRATIONS: string[][] = [
 
     `PRAGMA foreign_keys=ON`,
   ],
+
+  // v14 — token usage per step (Roadmap §9). The four counts a CLI reports for
+  // one invocation, kept apart (cache reads usually dominate a Claude run).
+  // Nullable: NULL means "the adapter reported no usage", distinct from a real 0.
+  // Per-run and per-agent totals are SUMs over these columns, computed in reads.
+  [
+    `ALTER TABLE run_steps ADD COLUMN input_tokens INTEGER`,
+    `ALTER TABLE run_steps ADD COLUMN output_tokens INTEGER`,
+    `ALTER TABLE run_steps ADD COLUMN cache_creation_tokens INTEGER`,
+    `ALTER TABLE run_steps ADD COLUMN cache_read_tokens INTEGER`,
+  ],
 ];

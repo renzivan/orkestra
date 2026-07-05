@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Task, TargetType, TaskStatus } from "@/lib/types";
+import type { Task, TargetType, TaskStatus, Usage } from "@/lib/types";
 import type { Runnable } from "@/lib/runnable";
 import { taskLabel, taskDeleteMessage, isTaskUnread } from "@/lib/repos/tasks";
+import { UsageBadge } from "../usage-badge";
 import {
   createTaskAction,
   runTaskAction,
@@ -40,6 +41,7 @@ export function TasksClient({
   defaultAgentId,
   prefix,
   runnable,
+  usage,
 }: {
   tasks: Task[];
   flows: Named[];
@@ -48,6 +50,9 @@ export function TasksClient({
   defaultAgentId: number;
   prefix: string;
   runnable: Record<number, Runnable>;
+  /** Latest-run token usage per task id; absent when a task's latest run
+   *  reported none (or it never ran) — the card then shows no Tokens line. */
+  usage: Record<number, Usage>;
 }) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
@@ -185,6 +190,7 @@ export function TasksClient({
                     label={taskLabel(prefix, t.id, t.title)}
                     target={`${t.target_type}: ${targetName(t)}`}
                     unread={isTaskUnread(t)}
+                    usage={usage[t.id] ?? null}
                     blocked={blocked}
                     reason={blocked ? r.reason : undefined}
                     dragging={draggingId === t.id}
@@ -270,6 +276,7 @@ function TaskCard({
   label,
   target,
   unread,
+  usage,
   blocked,
   reason,
   dragging,
@@ -286,6 +293,8 @@ function TaskCard({
   /** Settled since last opened — flag it so the user sees which card the badge
    *  is counting. Cleared when the task's detail is opened. */
   unread: boolean;
+  /** Latest-run token usage, or null when none reported — hides the Tokens line. */
+  usage: Usage | null;
   blocked: boolean;
   reason?: string;
   dragging: boolean;
@@ -316,6 +325,7 @@ function TaskCard({
         {label}
       </Link>
       <div className="task-card-target muted mono">{target}</div>
+      <UsageBadge usage={usage} compact />
       {blocked && (
         <div className="task-card-reason muted">can’t run: {reason}</div>
       )}
