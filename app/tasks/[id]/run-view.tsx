@@ -8,6 +8,13 @@ import type { RunWithSteps } from "@/lib/repos/runs";
 import type { TranscriptEntry } from "@/lib/engine/transcript";
 import { UsageBadge } from "../../usage-badge";
 import {
+  AttachmentChips,
+  FileDrop,
+  filesFromClipboard,
+  appendFiles,
+  type Chip,
+} from "../../attachments-ui";
+import {
   runTaskAction,
   replyToRunAction,
   stopRunAction,
@@ -15,6 +22,16 @@ import {
   resumeRunAction,
   markTaskSeenAction,
 } from "../../actions";
+
+// The delimiter withAttachments (lib/engine/attachments) prepends to the injected
+// path block. The block is stripped from a reply bubble's text — the files show as
+// chips instead — so the user sees their message, not the machine-readable paths.
+const ATTACHMENT_MARKER = "\n\n---\nAttached files (read as needed):";
+
+function stripAttachmentBlock(input: string): string {
+  const i = input.indexOf(ATTACHMENT_MARKER);
+  return i === -1 ? input : input.slice(0, i);
+}
 
 interface StepView {
   position: number;
@@ -91,6 +108,8 @@ export function RunView({
   initialRun,
   initialUsage,
   runnable,
+  bodyChips,
+  replyChips,
 }: {
   task: Task;
   initialRun: RunWithSteps | null;
@@ -99,6 +118,10 @@ export function RunView({
   // run's total appears without a manual reload. Null when nothing was reported.
   initialUsage: Usage | null;
   runnable: Runnable;
+  // The task's body attachments, shown as read-only chips under the task body.
+  bodyChips: Chip[];
+  // Reply attachments keyed by step position — chips under each reply bubble.
+  replyChips: Record<number, Chip[]>;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -253,9 +276,9 @@ export function RunView({
     }
   }
 
-  async function reply(text: string) {
+  async function reply(text: string, files: File[]) {
     if (!initialRun) return;
-    await replyToRunAction(initialRun.id, text);
+    await replyToRunAction(initialRun.id, text, files);
     router.refresh();
   }
 
@@ -365,7 +388,12 @@ export function RunView({
         )}
       </div>
 
-      {task.body && <Msg role="user">{task.body}</Msg>}
+      {(task.body || bodyChips.length > 0) && (
+        <Msg role="user">
+          {task.body}
+          {bodyChips.length > 0 && <AttachmentChips items={bodyChips} />}
+        </Msg>
+      )}
 
       {stepList.map((s, i) => {
         // A step whose input isn't the previous turn's answer is a user reply
@@ -379,9 +407,15 @@ export function RunView({
           prev != null &&
           s.input !== answerText(prev.entries) &&
           !isResumeContinuation;
+        const chips = replyChips[s.position] ?? [];
         return (
           <div key={s.position} className="turn">
-            {isReply && <Msg role="user">{s.input}</Msg>}
+            {isReply && (
+              <Msg role="user">
+                {stripAttachmentBlock(s.input)}
+                {chips.length > 0 && <AttachmentChips items={chips} />}
+              </Msg>
+            )}
             <div className="msg assistant">
               {multiAgent && (
                 <div className="msg-agent muted mono">{s.agent_name}</div>
@@ -570,8 +604,13 @@ function Inline({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-function Reply({ onSend }: { onSend: (text: string) => Promise<void> }) {
+function Reply({
+  onSend,
+}: {
+  onSend: (text: string, files: File[]) => Promise<void>;
+}) {
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
 
   async function send() {
@@ -579,8 +618,9 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<void> }) {
     if (!trimmed || sending) return;
     setSending(true);
     try {
-      await onSend(trimmed);
+      await onSend(trimmed, files);
       setText("");
+      setFiles([]);
     } finally {
       setSending(false);
     }
@@ -591,9 +631,17 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<void> }) {
       <textarea
         className="reply-input"
         rows={3}
-        placeholder="Reply… (continues the same conversation)"
+        placeholder="Reply… (continues the same conversation — paste a screenshot to attach)"
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onPaste={(e) => {
+          // A pasted screenshot attaches instead of inserting into the text.
+          const pasted = filesFromClipboard(e);
+          if (pasted.length > 0) {
+            e.preventDefault();
+            setFiles(appendFiles(files, pasted));
+          }
+        }}
         onKeyDown={(e) => {
           // ⌘/Ctrl+Enter to send.
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -603,6 +651,9 @@ function Reply({ onSend }: { onSend: (text: string) => Promise<void> }) {
         }}
         disabled={sending}
       />
+      <div style={{ marginTop: "var(--s-2)" }}>
+        <FileDrop files={files} onChange={setFiles} disabled={sending} />
+      </div>
       <div className="row spread" style={{ marginTop: "var(--s-2)" }}>
         <span className="muted mono" style={{ fontSize: 12 }}>
           ⌘↵ to send

@@ -552,4 +552,28 @@ export const MIGRATIONS: string[][] = [
     `ALTER TABLE run_steps ADD COLUMN cache_creation_tokens INTEGER`,
     `ALTER TABLE run_steps ADD COLUMN cache_read_tokens INTEGER`,
   ],
+
+  // v15 — file attachments on a task's body and on replies. A model can't be fed
+  // a file over stdin, so Orkestra saves each upload to disk and injects its
+  // absolute path into the step input (the CLI reads it by path). This table is
+  // the read model behind the chips shown on the task detail; the injected path
+  // is what the model actually uses. run_step_id is NULL for a body attachment
+  // (the first step of a run injects those) and set to the reply step for a reply
+  // attachment (so a re-run's first step never re-injects a later reply's files).
+  // Both FKs cascade: deleting the task removes every row (and the app removes the
+  // on-disk dir alongside it); deleting a run removes its replies' rows. space_id
+  // mirrors the owning task's Space for scoped reads, matching the v13 pattern.
+  [
+    `CREATE TABLE attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      run_step_id INTEGER REFERENCES run_steps(id) ON DELETE CASCADE,
+      space_id INTEGER NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      disk_path TEXT NOT NULL,
+      mime TEXT,
+      size INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+  ],
 ];

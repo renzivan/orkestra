@@ -6,6 +6,9 @@ import { getAgent } from "../repos/agents";
 import { getAdapter } from "../repos/adapters";
 import { getSettings } from "../repos/settings";
 import * as Runs from "../repos/runs";
+import * as Attachments from "../repos/attachments";
+import type { StoredFile } from "../attachments/store";
+import { withAttachments } from "./attachments";
 import { buildArgv } from "./template";
 import { runStep } from "./exec";
 import {
@@ -50,7 +53,17 @@ export async function runTask(
   const run = Runs.startRun(db, taskId);
   setTaskStatus(db, taskId, "running");
 
-  return runFrom(db, run.id, task, agents, settings, 0, 0, task.body);
+  // Fold the task's body attachments into the first step: their paths go into the
+  // input and their dirs are exposed to that step's CLI (see seedFromBody).
+  const seed = seedFromBody(db, task);
+  return runFrom(db, run.id, task, agents, settings, 0, 0, seed.input, undefined, seed.dirs);
+}
+
+/** Build the first step's input from a task's body plus its body attachments:
+ *  the injected paths and the dirs the CLI must be allowed to read. */
+function seedFromBody(db: Database, task: Task): { input: string; dirs: string[] } {
+  const atts = Attachments.listTaskBodyAttachments(db, task.id);
+  return withAttachments(task.body, atts.map((a) => a.disk_path));
 }
 
 /**
@@ -86,9 +99,25 @@ export async function resumeRun(
     // Every step finished; resume the flow at the next agent. Positions still
     // map 1:1 to agents here, so agent index and step position are the same.
     const nextAgent = run.steps.length;
-    const seedInput =
-      nextAgent === 0 ? task.body : run.steps[nextAgent - 1].output;
-    return runFrom(db, runId, task, agents, settings, nextAgent, nextAgent, seedInput);
+    // Resuming before the first step ever ran is effectively a fresh start, so it
+    // seeds the body attachments too; a later agent chains the prior output (no
+    // attachments) and needs no exposed dirs.
+    const seed =
+      nextAgent === 0
+        ? seedFromBody(db, task)
+        : { input: run.steps[nextAgent - 1].output, dirs: [] };
+    return runFrom(
+      db,
+      runId,
+      task,
+      agents,
+      settings,
+      nextAgent,
+      nextAgent,
+      seed.input,
+      undefined,
+      seed.dirs,
+    );
   }
 
   // Mid-step: preserve the interrupted step and append a continuation. The
@@ -132,6 +161,9 @@ async function runFrom(
   // to the first re-run agent (startAgent) alone — later agents are genuinely
   // new conversations, so they never inherit a session.
   resumeSession?: string,
+  // Attachment dirs to expose on the first agent only (startAgent). Later agents
+  // receive the prior step's output as input, which carries no file paths.
+  firstStepDirs: string[] = [],
 ): Promise<Runs.RunWithSteps> {
   register(runId);
   let input = seedInput;
@@ -148,6 +180,7 @@ async function runFrom(
       const step = await executeStep(db, runId, pos, agent, adapter, settings, {
         input,
         resume: ai === startAgent ? resumeSession : undefined,
+        extraDirs: ai === startAgent ? firstStepDirs : undefined,
       });
       if (step.stopped) return stopRun(db, runId, task.id);
       if (!step.ok) {
@@ -180,6 +213,10 @@ export async function replyToRun(
   db: Database,
   runId: number,
   reply: string,
+  // Files the user attached to this reply, already written to disk by the action
+  // layer. Their paths are injected into the reply and their dirs exposed to the
+  // CLI; a row per file is recorded against the reply step once it exists.
+  attachments: StoredFile[] = [],
 ): Promise<Runs.RunWithSteps> {
   const run = Runs.getRunWithSteps(db, runId);
   const last = run.steps[run.steps.length - 1];
@@ -198,6 +235,7 @@ export async function replyToRun(
 
   register(runId);
   try {
+    const folded = withAttachments(reply, attachments.map((a) => a.disk_path));
     const step = await executeStep(
       db,
       runId,
@@ -205,8 +243,21 @@ export async function replyToRun(
       agent,
       adapter,
       settings,
-      { input: reply, resume: last.session_id },
+      { input: folded.input, resume: last.session_id, extraDirs: folded.dirs },
     );
+    // Record the reply's attachments against the step now that it exists (any
+    // outcome — the reply record should show what was sent even if it failed).
+    for (const a of attachments) {
+      Attachments.createAttachment(db, {
+        task_id: task.id,
+        run_step_id: step.stepId,
+        space_id: task.space_id,
+        filename: a.filename,
+        disk_path: a.disk_path,
+        mime: null,
+        size: a.size,
+      });
+    }
     if (step.stopped) return stopRun(db, runId, run.task_id);
     if (!step.ok) {
       return fail(db, runId, run.task_id, `reply (${agent.name}) ${step.reason}`);
@@ -226,10 +277,11 @@ export async function replyToRun(
   }
 }
 
-type StepOutcome =
+type StepOutcome = { stepId: number } & (
   | { ok: true; output: string; stopped?: false }
   | { ok: false; reason: string; stopped?: false }
-  | { ok: false; stopped: true };
+  | { ok: false; stopped: true }
+);
 
 /**
  * Run one agent invocation as a persisted, live-streamed step. The transcript
@@ -244,13 +296,15 @@ async function executeStep(
   agent: Agent,
   adapter: { command: string },
   settings: { step_timeout_seconds: number; retries: number },
-  opts: { input: string; resume?: string },
+  opts: { input: string; resume?: string; extraDirs?: string[] },
 ): Promise<StepOutcome> {
   const makeTransform = transformFor(adapter.command);
   const argv = buildArgv(adapter.command, {
     system: buildSystem(agent),
     input: opts.input,
-    projects: agent.projects.map((p) => p.path),
+    // Attachment dirs ride alongside the agent's own project paths so the CLI is
+    // permitted to read the files whose paths were injected into the input.
+    projects: [...agent.projects.map((p) => p.path), ...(opts.extraDirs ?? [])],
     model: agent.model,
     effort: agent.effort === "off" ? "" : agent.effort,
     resume: opts.resume ?? "",
@@ -307,7 +361,7 @@ async function executeStep(
       status,
       exit_code: result.exitCode,
     });
-    return { ok: false, stopped: true };
+    return { ok: false, stopped: true, stepId };
   }
 
   if (result.exitCode === 0 && !result.timedOut) {
@@ -323,7 +377,7 @@ async function executeStep(
       status: "succeeded",
       exit_code: result.exitCode,
     });
-    return { ok: true, output: result.stdout };
+    return { ok: true, output: result.stdout, stepId };
   }
 
   const reason = result.timedOut ? "timed out" : `exited ${result.exitCode}`;
@@ -340,7 +394,7 @@ async function executeStep(
     status: "failed",
     exit_code: result.exitCode,
   });
-  return { ok: false, reason };
+  return { ok: false, reason, stepId };
 }
 
 function fail(

@@ -7,8 +7,14 @@ import * as Projects from "@/lib/repos/projects";
 import * as Agents from "@/lib/repos/agents";
 import * as Flows from "@/lib/repos/flows";
 import * as Tasks from "@/lib/repos/tasks";
+import * as Attachments from "@/lib/repos/attachments";
 import * as Spaces from "@/lib/repos/spaces";
-import { latestRunForTask } from "@/lib/repos/runs";
+import {
+  writeAttachment,
+  removeTaskAttachments,
+  type StoredFile,
+} from "@/lib/attachments/store";
+import { latestRunForTask, getRunWithSteps } from "@/lib/repos/runs";
 import * as Settings from "@/lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "@/lib/engine/runner";
 import { stop, pause } from "@/lib/engine/registry";
@@ -212,14 +218,47 @@ export async function deleteSpaceAction(id: number): Promise<DeleteResult> {
 }
 
 // ---- Tasks ----
-export async function createTaskAction(input: {
-  title: string;
-  body: string;
-  target_type: TargetType;
-  target_id: number;
-}) {
+
+/** Write uploaded files into a task's attachment dir. Returns where each landed
+ *  (name may be de-duplicated). Shared by task creation and replies — the caller
+ *  decides how to record them (body rows vs the reply step). */
+async function writeUploads(
+  taskId: number,
+  files: File[],
+): Promise<StoredFile[]> {
+  const stored: StoredFile[] = [];
+  for (const file of files) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    stored.push(writeAttachment(taskId, file.name, bytes));
+  }
+  return stored;
+}
+
+export async function createTaskAction(
+  input: {
+    title: string;
+    body: string;
+    target_type: TargetType;
+    target_id: number;
+  },
+  // Files dropped on the create form. Written to the new task's dir and recorded
+  // as body attachments, so the first step of a run injects their paths.
+  files: File[] = [],
+) {
   const spaceId = await getActiveSpaceId(db());
   const task = Tasks.createTask(db(), spaceId, input);
+  const stored = await writeUploads(task.id, files);
+  for (const s of stored) {
+    Attachments.createAttachment(db(), {
+      task_id: task.id,
+      run_step_id: null, // body attachment
+      space_id: spaceId,
+      filename: s.filename,
+      disk_path: s.disk_path,
+      mime: null,
+      size: s.size,
+    });
+  }
   revalidate("/tasks");
   return task;
 }
@@ -233,6 +272,9 @@ export async function deleteTaskAction(id: number): Promise<DeleteResult> {
     const latest = latestRunForTask(db(), id);
     if (latest) stop(latest.id);
   }
+  // Attachment rows go by FK cascade; the on-disk dir has no cascade, so wipe it
+  // here. Done before the delete so a failure surfaces rather than orphaning files.
+  removeTaskAttachments(id);
   return tryDelete(() => Tasks.deleteTask(db(), id), "/tasks");
 }
 
@@ -255,14 +297,22 @@ export async function runTaskAction(
   return { ok: true };
 }
 
-/** Reply to a finished run, resuming its conversation with another step. */
+/** Reply to a finished run, resuming its conversation with another step. Any
+ *  files dropped on the reply are written to the task's dir first (so their paths
+ *  can be injected), then handed to replyToRun which records them on the step. */
 export async function replyToRunAction(
   runId: number,
   text: string,
+  files: File[] = [],
 ): Promise<{ ok: true }> {
+  // Resolve the owning task to know which dir the uploads belong in. Writing the
+  // files must finish before the fire-and-forget run, so their paths exist when
+  // the step is built.
+  const run = getRunWithSteps(db(), runId);
+  const stored = await writeUploads(run.task_id, files);
   // replyToRun reopens the run + adds the step synchronously before its first
   // await, so a refresh right after this sees the run 'running'.
-  void replyToRun(db(), runId, text).catch(() => {
+  void replyToRun(db(), runId, text, stored).catch(() => {
     /* failure is persisted on the run/task by replyToRun itself */
   });
   revalidate("/tasks");

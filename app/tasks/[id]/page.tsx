@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getTask, taskLabel } from "@/lib/repos/tasks";
 import { latestRunForTask, getRunWithSteps, runUsage } from "@/lib/repos/runs";
+import {
+  listTaskBodyAttachments,
+  listStepAttachments,
+} from "@/lib/repos/attachments";
 import { getSettings } from "@/lib/repos/settings";
+import type { Chip } from "../../attachments-ui";
 import { taskRunnable } from "@/lib/runnable";
 import { RunView } from "./run-view";
 import { DeleteTaskButton } from "./delete-task-button";
@@ -27,6 +32,19 @@ export default async function TaskDetailPage({
   // page can be opened while a different Space is active.
   const prefix = getSettings(database, task.space_id).task_prefix;
   const runnable = taskRunnable(database, task);
+
+  // Attachments as chips: the body ones under the task body, the reply ones keyed
+  // by the step position they were sent with (matching run-view's StepView key).
+  const toChip = (a: { filename: string; size: number }): Chip => ({
+    name: a.filename,
+    size: a.size,
+  });
+  const bodyChips = listTaskBodyAttachments(database, task.id).map(toChip);
+  const replyChips: Record<number, Chip[]> = {};
+  for (const step of run?.steps ?? []) {
+    const chips = listStepAttachments(database, step.id).map(toChip);
+    if (chips.length > 0) replyChips[step.position] = chips;
+  }
 
   return (
     <>
@@ -53,6 +71,8 @@ export default async function TaskDetailPage({
         initialRun={run}
         initialUsage={usage}
         runnable={runnable}
+        bodyChips={bodyChips}
+        replyChips={replyChips}
       />
     </>
   );

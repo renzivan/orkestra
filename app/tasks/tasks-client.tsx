@@ -15,6 +15,7 @@ import {
 } from "../actions";
 import { useConfirm } from "../confirm-dialog";
 import { toast } from "../toast";
+import { FileDrop, filesFromClipboard, appendFiles } from "../attachments-ui";
 
 interface Named {
   id: number;
@@ -376,6 +377,9 @@ function NewTaskModal({
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  // Files dropped on the form, buffered until Create (then uploaded with the task
+  // and injected into the first agent's input by path).
+  const [files, setFiles] = useState<File[]>([]);
   // Preselect the Default agent so a task can be created with no target fiddling.
   const [targetType, setTargetType] = useState<TargetType>("agent");
   const [targetId, setTargetId] = useState<number | null>(defaultAgentId);
@@ -389,12 +393,15 @@ function NewTaskModal({
     if (!targetId) return setError("Pick a target to run.");
     setBusy(true);
     try {
-      await createTaskAction({
-        title: title.trim(),
-        body,
-        target_type: targetType,
-        target_id: targetId,
-      });
+      await createTaskAction(
+        {
+          title: title.trim(),
+          body,
+          target_type: targetType,
+          target_id: targetId,
+        },
+        files,
+      );
       toast.success("Task created.");
       onCreated();
     } catch (e) {
@@ -431,9 +438,21 @@ function NewTaskModal({
             <label>Details (fed as input to the first agent)</label>
             <textarea
               value={body}
-              placeholder="Describe the work…"
+              placeholder="Describe the work… (paste a screenshot to attach)"
               onChange={(e) => setBody(e.target.value)}
+              onPaste={(e) => {
+                // A pasted screenshot attaches instead of inserting into the text.
+                const pasted = filesFromClipboard(e);
+                if (pasted.length > 0) {
+                  e.preventDefault();
+                  setFiles(appendFiles(files, pasted));
+                }
+              }}
             />
+          </div>
+          <div>
+            <label>Attachments (read by the first agent)</label>
+            <FileDrop files={files} onChange={setFiles} disabled={busy} />
           </div>
           <div className="row" style={{ alignItems: "flex-end" }}>
             <div style={{ flex: "0 0 160px" }}>

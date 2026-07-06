@@ -9,6 +9,7 @@ import * as Agents from "../../lib/repos/agents";
 import * as Flows from "../../lib/repos/flows";
 import * as Tasks from "../../lib/repos/tasks";
 import * as Runs from "../../lib/repos/runs";
+import * as Attachments from "../../lib/repos/attachments";
 import * as Settings from "../../lib/repos/settings";
 import { runTask, replyToRun, resumeRun } from "../../lib/engine/runner";
 import { subscribeTasks } from "../../lib/engine/bus";
@@ -74,6 +75,62 @@ test("single-agent task runs one step", async () => {
   const run = await runTask(db, t.id);
   expect(run.status).toBe("succeeded");
   expect(Runs.getRunWithSteps(db, run.id).steps.length).toBe(1);
+});
+
+test("a task's body attachments inject their paths into the first step", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "echo", command: ECHO });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, SPACE, {
+    title: "T",
+    body: "look at this",
+    target_type: "agent",
+    target_id: a.id,
+  });
+  Attachments.createAttachment(db, {
+    task_id: t.id,
+    run_step_id: null,
+    space_id: SPACE,
+    filename: "shot.png",
+    disk_path: "/x/att/1/shot.png",
+    mime: null,
+    size: 3,
+  });
+
+  const run = await runTask(db, t.id);
+
+  // The echo model echoes stdin, so the first step's input is exactly what was
+  // piped: the body plus the injected attachment block.
+  const step = Runs.getRunWithSteps(db, run.id).steps[0];
+  expect(step.input).toContain("look at this");
+  expect(step.input).toContain("Attached files");
+  expect(step.input).toContain("/x/att/1/shot.png");
+});
+
+test("a reply's attachments inject paths and are recorded on the reply step", async () => {
+  const db = openDb(":memory:");
+  const m = Adapters.createAdapter(db, { name: "sess", command: SESSION });
+  const a = agent(db, "solo", m.id);
+  const t = Tasks.createTask(db, SPACE, {
+    title: "T",
+    body: "hi",
+    target_type: "agent",
+    target_id: a.id,
+  });
+  const run = await runTask(db, t.id);
+
+  await replyToRun(db, run.id, "see this", [
+    { filename: "e.log", disk_path: `/x/att/${t.id}/e.log`, size: 5 },
+  ]);
+
+  const steps = Runs.getRunWithSteps(db, run.id).steps;
+  const reply = steps[steps.length - 1];
+  expect(reply.input).toContain("see this");
+  expect(reply.input).toContain(`/x/att/${t.id}/e.log`);
+  // A row is recorded against the reply step (drives the read-only chips).
+  expect(Attachments.listStepAttachments(db, reply.id).map((r) => r.filename)).toEqual([
+    "e.log",
+  ]);
 });
 
 test("running a task pings the tasks topic on start and settle", async () => {

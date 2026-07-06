@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { homedir } from "os";
 import { mkdirSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { MIGRATIONS } from "./migrations";
 import { reconcileStaleRuns } from "../repos/runs";
 
@@ -38,6 +38,15 @@ function defaultDbPath(): string {
   const dir = join(homedir(), ".orkestra");
   mkdirSync(dir, { recursive: true });
   return join(dir, "orkestra.db");
+}
+
+/** The directory Orkestra keeps its data in — where the SQLite file lives, and
+ *  the base for anything stored beside it (e.g. attachments). Tracks the same
+ *  ORKESTRA_DB override as the db itself, so a test pointing the db at a temp
+ *  file keeps its attachments in that same temp dir. */
+export function orkestraHome(): string {
+  const fromEnv = process.env.ORKESTRA_DB;
+  return fromEnv ? dirname(fromEnv) : join(homedir(), ".orkestra");
 }
 
 // Pinned on globalThis, not a module-level let: Next.js gives Server Actions

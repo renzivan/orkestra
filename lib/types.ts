@@ -13,6 +13,24 @@ export interface Skill {
   updated_at: string;
 }
 
+/** A file a user attached to a task's body or to a reply. Orkestra saves it under
+ *  the task's attachment dir and hands the CLI its absolute path (a model reads it
+ *  by path — there is no multimodal stdin). `run_step_id` is NULL for a body
+ *  attachment (injected into the first step of a run) and set to the reply step
+ *  for a reply attachment, which keeps a re-run's first step from re-injecting a
+ *  later reply's files. */
+export interface Attachment {
+  id: number;
+  task_id: number;
+  run_step_id: number | null;
+  space_id: number;
+  filename: string;
+  disk_path: string;
+  mime: string | null;
+  size: number;
+  created_at: string;
+}
+
 /** One named instruction file belonging to an agent. Exactly one of an agent's
  *  files is the ENTRY (it composes first). See buildSystem in the engine. */
 export interface AgentInstruction {

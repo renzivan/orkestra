@@ -759,6 +759,67 @@ pre.output {
   font-size: 13px;
 }
 
+/* drag-and-drop attachment zone (task create + reply) */
+.filedrop {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--bg);
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.filedrop.over {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 8%, var(--panel));
+  color: var(--fg);
+}
+.filedrop.disabled {
+  opacity: 0.55;
+}
+
+/* filename chips — buffered uploads (with remove) and read-only display */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  font-size: 12px;
+  max-width: 100%;
+}
+.chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.chip-size {
+  font-size: 11px;
+}
+.chip-x {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+}
+.chip-x:hover {
+  color: var(--danger);
+}
+
 /* the agent's answer text — primary */
 .tr.text .tr-body {
   color: var(--fg);
